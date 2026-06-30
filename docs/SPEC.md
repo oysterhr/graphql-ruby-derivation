@@ -28,7 +28,7 @@ corresponding row(s) in the same PR. See `AGENTS.md`.
 | [9. ActiveRecord Adapter](#9-activerecord-adapter) | Specified |
 | [10. Testing Requirements](#10-testing-requirements) | Specified |
 | [11. Open Questions (Deferred to Implementation)](#11-open-questions-deferred-to-implementation) | N/A |
-| [12. Development Environment (Nix)](#12-development-environment-nix) | In Progress |
+| [12. Development Environment (Nix)](#12-development-environment-nix) | Implemented |
 | [Appendix: Derivation Direction Rules](#appendix-derivation-direction-rules) | N/A |
 
 ---

@@ -19,8 +19,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `ControllerConcern` supplies the controller class as that resolver.
 - `GraphQL::Derivation::FieldDerivation` engine plus `ObjectTypeToField` mapper, deriving
   `GraphQL::Schema::Field` instances from an ObjectType source, including resolver Case 1/2/3
-  handling (SPEC §5). ActiveRecord-model sources are not yet supported — deferred until the
-  ActiveRecord adapter lands (SPEC §9).
+  handling (SPEC §5). ActiveRecord-model sources are now also supported, dispatching to the
+  ActiveRecord adapter (SPEC §9) once it has been required.
 - `GraphQL::Derivation::DerivableInputObject` mixin: `derive_from` on `GraphQL::Schema::InputObject`
   subclasses, with deferred resolution via `resolve_all!`, collision detection against inline
   `argument` declarations, and idempotent re-resolution (SPEC §6).
@@ -34,6 +34,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `MissingInputTypeError` (load-time) and `ArgumentParsingError` (request-time) errors (SPEC §8).
   `activesupport` and `actionpack` (`~> 7.0`) are declared as optional development dependencies,
   consumed only through this require path (core stays Rails-free).
+- ActiveRecord adapter (`require 'graphql/derivation/rails/active_record'`):
+  `GraphQL::Derivation::Rails::Adapters::ActiveRecordMapper`, mapping AR column definitions to
+  GraphQL field type/null information for `FieldDerivation` (SPEC §9). Covers the full §9.1 column
+  type table (including `:array` of a mappable element type, and `UnsupportedColumnTypeError` for
+  `:jsonb`/`:json`/`:hstore` and other unmapped types), Rails-enum/native-enum generation with
+  per-`(model, column)` memoization (§9.2), NOT-NULL-derived `null:` defaults overridable via
+  `pick.override` (§9.3), and the `id`/`created_at`/`updated_at` exclusion (§9.4). Reconciles §9.1's
+  type-keyed mapping table with §9.4's "foreign key columns map to `GraphQL::Types::ID`" note as a
+  name-based override: a column whose name ends in `_id` (and isn't the already-excluded `id`
+  primary key) is mapped to `GraphQL::Types::ID` instead of `GraphQL::Types::Int` whenever its
+  underlying type would otherwise resolve to `Int`. `activerecord` (`~> 7.0`) is declared as an
+  optional development dependency, consumed only through this require path.
 
 ### Fixed
 

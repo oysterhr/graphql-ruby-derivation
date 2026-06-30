@@ -13,8 +13,8 @@ module GraphQL
       module_function
 
       # @param source [Class] An ObjectType class (`< GraphQL::Schema::
-      #   Object`). ActiveRecord model sources are SPEC.md §5.1-valid but
-      #   not yet supported -- see `raise_active_record_unsupported_error`.
+      #   Object`) or an ActiveRecord model class (`< ActiveRecord::Base`,
+      #   SPEC.md §5.1/§9 -- requires `graphql/derivation/rails/active_record`).
       # @param pick_block [Proc] Called with a `PickFields` instance.
       # @return [Array<GraphQL::Schema::Field>]
       def resolve(source, pick_block)
@@ -40,7 +40,7 @@ module GraphQL
         if object_type_source?(source)
           Mappers::ObjectTypeToField.candidates(source)
         elsif active_record_source?(source)
-          raise_active_record_unsupported_error(source)
+          active_record_candidates(source)
         else
           raise_unsupported_source_error(source)
         end
@@ -56,15 +56,26 @@ module GraphQL
         source.is_a?(Class) && defined?(ActiveRecord::Base) && source < ActiveRecord::Base
       end
 
-      # SPEC.md §5.1 permits ActiveRecord model sources, but the adapter
-      # that implements column-to-type mapping (SPEC.md §9, ActiveRecord
-      # Adapter) does not exist yet. This is a known gap tracked against
-      # SPEC.md §5's "In Progress" status -- see the PR description.
-      def raise_active_record_unsupported_error(source)
+      # SPEC.md §5.1/§5.2/§9: dispatches AR-model sources to the
+      # ActiveRecord adapter. Only reachable once `graphql/derivation/rails/
+      # active_record` has been required -- `active_record_source?` already
+      # guards on `ActiveRecord::Base` being defined, but core itself never
+      # requires the adapter file, so if a host app loads ActiveRecord
+      # without opting into this gem's AR integration, surface a clear error
+      # instead of a bare NameError on the adapter constant.
+      def active_record_candidates(source)
+        unless defined?(GraphQL::Derivation::Rails::Adapters::ActiveRecordMapper)
+          raise_active_record_adapter_not_loaded_error(source)
+        end
+
+        GraphQL::Derivation::Rails::Adapters::ActiveRecordMapper.candidates(source)
+      end
+
+      def raise_active_record_adapter_not_loaded_error(source)
         raise NotImplementedError,
-          "ActiveRecord source #{source.inspect} is not yet supported by FieldDerivation. " \
-          'AR-model sources are deferred to the ActiveRecord Adapter (SPEC.md §9, ' \
-          "requiring 'graphql/derivation/rails/active_record'), which does not exist yet."
+          "ActiveRecord source #{source.inspect} requires the ActiveRecord adapter " \
+          "(SPEC.md §9), which has not been loaded. Add `require 'graphql/derivation/rails/" \
+          "active_record'` to opt in."
       end
 
       def raise_unsupported_source_error(source)
@@ -76,8 +87,11 @@ module GraphQL
       # SPEC.md §5.4's `check_resolver!` step. Raises `UnresolvableFieldError`
       # for an unresolved Case 3 (custom class resolver) candidate unless
       # the pick block's override supplies an explicit `method:` or
-      # `resolver:`.
+      # `resolver:`. AR-model candidates (SPEC.md §9) have no resolver case
+      # at all -- columns always resolve via the default method resolver --
+      # so this is a no-op for them.
       def check_resolver!(name, candidate, overrides)
+        return unless candidate.respond_to?(:resolver_case)
         return unless candidate.resolver_case == :custom_resolver
         return if overrides.key?(:method) || overrides.key?(:resolver)
 
@@ -118,18 +132,24 @@ module GraphQL
 
       # Case 2 candidates carry their source `method:` forward by default,
       # so a destination type whose underlying object also responds to
-      # that method needs no override. The pick block's overrides (merged
-      # afterwards in `build_field`) take precedence over this default.
+      # that method needs no override. AR-model candidates (SPEC.md §9.3)
+      # carry their NOT-NULL-derived `null:` default forward the same way.
+      # The pick block's overrides (merged afterwards in `build_field`)
+      # take precedence over either default.
       def candidate_opts(candidate)
         opts = {}
-        opts[:method] = candidate.method_override if candidate.resolver_case == :method
+        if candidate.respond_to?(:resolver_case) && candidate.resolver_case == :method
+          opts[:method] = candidate.method_override
+        end
+        opts[:null] = candidate.null if candidate.respond_to?(:null)
 
         opts
       end
 
       private_class_method :object_type_source?,
         :active_record_source?,
-        :raise_active_record_unsupported_error,
+        :active_record_candidates,
+        :raise_active_record_adapter_not_loaded_error,
         :raise_unsupported_source_error,
         :check_resolver!,
         :build_field,

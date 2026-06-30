@@ -72,24 +72,130 @@ RSpec.describe GraphQL::Derivation::FieldDerivation do
       end
     end
 
-    context 'with an ActiveRecord model source' do
+    context 'with an ActiveRecord model source, adapter not loaded' do
       # `FixtureSchema::Expense` is deliberately a plain Ruby stand-in, not a
       # real `ActiveRecord::Base` subclass (SPEC.md §10.5) -- the gem's own
       # test suite never loads ActiveRecord. To exercise the
-      # `source < ActiveRecord::Base` branch of `FieldDerivation`, this
-      # context defines a minimal `ActiveRecord::Base` stand-in for the
-      # duration of the example, simulating a host app where ActiveRecord
-      # is loaded, then removes it so other examples are unaffected.
+      # `source < ActiveRecord::Base` branch of `FieldDerivation` without
+      # the ActiveRecord adapter (`graphql/derivation/rails/active_record`)
+      # loaded, this context defines a minimal `ActiveRecord::Base`
+      # stand-in for the duration of the example, simulating a host app
+      # that has loaded ActiveRecord but not opted into this gem's AR
+      # integration, then removes it so other examples are unaffected.
+      #
+      # `ActiveRecordMapper` is also hidden via `hide_const`: other spec
+      # files in this suite (e.g. `active_record_mapper_spec.rb`) genuinely
+      # require `graphql/derivation/rails/active_record`, and once required
+      # the constant stays defined process-wide (Ruby has no "unrequire").
+      # Hiding it here keeps this example's behaviour independent of test
+      # run order.
       before do
         stub_const('ActiveRecord::Base', Class.new)
+        hide_const('GraphQL::Derivation::Rails::Adapters::ActiveRecordMapper') if defined?(
+          GraphQL::Derivation::Rails::Adapters::ActiveRecordMapper
+        )
       end
 
-      it 'raises a clear deferred-feature error pointing at the future require path' do
+      it 'raises a clear error pointing at the ActiveRecord adapter require path' do
         model = Class.new(ActiveRecord::Base)
 
         expect do
           resolve(model) { |pick| pick.fields(:title) }
         end.to raise_error(NotImplementedError, %r{graphql/derivation/rails/active_record})
+      end
+    end
+
+    context 'with a real ActiveRecord model source (adapter loaded)' do
+      # Requiring the adapter here (rather than at the top of the file) is
+      # deliberate: it keeps the rest of this spec file's examples running
+      # in an environment where ActiveRecord has not been loaded, matching
+      # SPEC.md §10.5's "no DB required" and AGENTS.md's "core loads/runs
+      # without Rails or ActiveRecord" rule for the bulk of the suite. This
+      # context is the one place that legitimately exercises the AR
+      # integration end-to-end.
+      before { require 'graphql/derivation/rails/active_record' }
+
+      # `FixtureSchema::Expense` (SPEC.md §10.5's stub) is not itself a
+      # `< ActiveRecord::Base` descendant, so a tiny real subclass is used
+      # here purely to satisfy `active_record_source?`'s ancestry check;
+      # its `.columns`/`.defined_enums` are delegated to the stub.
+      let(:model) do
+        Class.new(ActiveRecord::Base) do
+          def self.columns
+            FixtureSchema::Expense.columns
+          end
+
+          def self.defined_enums
+            FixtureSchema::Expense.defined_enums
+          end
+
+          def self.name
+            'Expense'
+          end
+        end
+      end
+
+      it 'returns real GraphQL::Schema::Field instances for selected AR columns' do
+        fields = resolve(model) do |pick|
+          pick.fields(:title, :amount_cents, :reimbursable, :category, :team_member_id)
+        end
+
+        expect(fields).to all(be_a(GraphQL::Schema::Field))
+      end
+
+      it 'derives a field for every selected AR column' do
+        fields = resolve(model) do |pick|
+          pick.fields(:title, :amount_cents, :reimbursable, :category, :team_member_id)
+        end
+
+        expect(fields.map(&:graphql_name)).to contain_exactly(
+          'title', 'amountCents', 'reimbursable', 'category', 'teamMemberId',
+        )
+      end
+
+      it 'maps a not-null :string column to String!' do
+        fields = resolve(model) { |pick| pick.fields(:title) }
+
+        expect(fields.first.type.to_type_signature).to eq('String!')
+      end
+
+      it 'maps a nullable :text column to String' do
+        fields = resolve(model) { |pick| pick.fields(:description) }
+
+        expect(fields.first.type.to_type_signature).to eq('String')
+      end
+
+      it 'maps a not-null :integer column to Int!' do
+        fields = resolve(model) { |pick| pick.fields(:amount_cents) }
+
+        expect(fields.first.type.to_type_signature).to eq('Int!')
+      end
+
+      it 'maps a not-null *_id :bigint column to ID! (foreign-key override)' do
+        fields = resolve(model) { |pick| pick.fields(:team_member_id) }
+
+        expect(fields.first.type.to_type_signature).to eq('ID!')
+      end
+
+      it 'allows a pick.override to flip null: for an AR-derived field' do
+        fields = resolve(model) do |pick|
+          pick.fields(:description)
+          pick.override(:description, null: false)
+        end
+
+        expect(fields.first.type.to_type_signature).to eq('String!')
+      end
+
+      it 'raises UnsupportedColumnTypeError when an unsupported column is selected' do
+        expect do
+          resolve(model) { |pick| pick.fields(:metadata) }
+        end.to raise_error(GraphQL::Derivation::UnsupportedColumnTypeError, /metadata/)
+      end
+
+      it 'excludes id/created_at/updated_at from the candidate set' do
+        expect do
+          resolve(model) { |pick| pick.fields(:id) }
+        end.to raise_error(GraphQL::Derivation::ConfigurationError, /id/)
       end
     end
 

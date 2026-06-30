@@ -49,22 +49,54 @@ module GraphQL
         # SPEC.md §6.3: resolves this class's pending derivation, if any.
         # Idempotent -- a second call is a no-op once resolution has
         # happened (or if `derive_from` was never called).
-        def resolve_derivation!
+        #
+        # @param context [#resolve_sibling_arguments, nil] forwarded to
+        #   ArgumentDerivation for Symbol (sibling action) sources. Only the
+        #   Rails ControllerConcern (SPEC.md §8) supplies this -- ordinary
+        #   InputObjects never use Symbol sources (SPEC.md §11.1), so the
+        #   default of nil keeps non-Rails callers unchanged.
+        def resolve_derivation!(context: nil)
           return unless defined?(@derivation_pick_block) && @derivation_pick_block
 
           pre_existing_names = arguments.keys
 
           derived_arguments = GraphQL::Derivation::ArgumentDerivation.resolve(
-            @derivation_source, @derivation_pick_block,
+            @derivation_source, @derivation_pick_block, context: context,
           )
 
           check_collisions!(pre_existing_names, derived_arguments)
-          derived_arguments.each { |argument| add_argument(argument) }
+          derived_arguments.each { |argument| register_derived_argument(argument) }
 
           @derivation_pick_block = nil
         end
 
+        # Internal escape hatch for the Rails ControllerConcern: its
+        # auto-generated InputObjects DO have an action registry (the
+        # controller class) to resolve Symbol siblings against, so they opt
+        # into Symbol sources by calling this before `derive_from`. User-defined
+        # DerivableInputObjects never call it, so §11.1's rejection still
+        # applies to them. Public because the ControllerConcern sets it on the
+        # generated class from the outside.
+        def allow_sibling_sources!
+          @allow_sibling_sources = true
+        end
+
         private
+
+        # ArgumentDerivation builds arguments unattached (`owner: nil`) -- it
+        # has no way to know which class will register them (SPEC.md §4.4:
+        # "the caller registers it on the target InputObject"). graphql-ruby's
+        # coercion path, however, calls `owner.validate_directive_argument`
+        # during `coerce_input`, so the argument MUST know its owner before it
+        # can coerce input. `GraphQL::Schema::Argument#owner` is read-only (set
+        # only in the constructor), so attaching here means setting the ivar
+        # directly -- a deliberate, scoped exception to "no instance_variable_set
+        # on third-party objects", because there is no public setter and
+        # rebuilding the argument would drop configured options.
+        def register_derived_argument(argument)
+          argument.instance_variable_set(:@owner, self)
+          add_argument(argument)
+        end
 
         def check_not_already_derived!
           return unless defined?(@derivation_source) && @derivation_source
@@ -77,9 +109,11 @@ module GraphQL
         # SPEC.md §11.1: sibling (Symbol) sources have no natural
         # equivalent outside ControllerConcern's action registry --
         # disallow them immediately, the same as §4.1's "any other invalid
-        # source" treatment.
+        # source" treatment. The ControllerConcern (which DOES have a registry)
+        # is exempt via `allow_sibling_sources!`.
         def check_supported_source!(source)
           return unless source.is_a?(Symbol)
+          return if defined?(@allow_sibling_sources) && @allow_sibling_sources
 
           raise ArgumentError,
             "Unsupported DerivableInputObject source: #{source.inspect}. " \

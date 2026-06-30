@@ -138,10 +138,55 @@ RSpec.describe GraphQL::Derivation::ArgumentDerivation do
     end
 
     context 'with a Symbol (sibling action) source' do
-      it 'raises NotImplementedError because the ControllerConcern registry does not exist yet' do
+      # SPEC.md §4.2: Symbol sources are resolved via a `context:` object that
+      # responds to `resolve_sibling_arguments(symbol)`. This is the seam the
+      # Rails ControllerConcern plugs the controller class into. The engine
+      # stays Rails-free, so this is tested with a lightweight fake resolver
+      # rather than a real controller.
+      let(:sibling_resolver) do
+        sibling_arguments = [
+          GraphQL::Schema::Argument.new(:title, String, owner: nil, required: true),
+          GraphQL::Schema::Argument.new(:category, String, owner: nil, required: false),
+        ]
+        Class.new do
+          define_method(:resolve_sibling_arguments) do |name|
+            raise "unexpected sibling #{name.inspect}" unless name == :create
+
+            sibling_arguments
+          end
+        end.new
+      end
+
+      it 'resolves the named sibling action via the context resolver' do
+        arguments = described_class.resolve(
+          :create, ->(pick) { pick.required(:title) }, context: sibling_resolver,
+        )
+
+        expect(arguments.map(&:graphql_name)).to contain_exactly('title')
+      end
+
+      it 'maps the sibling argument type by identity' do
+        arguments = described_class.resolve(
+          :create, ->(pick) { pick.optional(:title) }, context: sibling_resolver,
+        )
+        title = arguments.find { |argument| argument.graphql_name == 'title' }
+
+        expect(title.type.unwrap).to eq(GraphQL::Types::String)
+      end
+
+      it 'lets the pick block re-control nullability of an identity-mapped sibling argument' do
+        arguments = described_class.resolve(
+          :create, ->(pick) { pick.optional(:title) }, context: sibling_resolver,
+        )
+        title = arguments.find { |argument| argument.graphql_name == 'title' }
+
+        expect(title.type).not_to be_non_null
+      end
+
+      it 'raises ConfigurationError when no sibling resolver is supplied' do
         expect do
           resolve(:create) { |pick| pick.optional(:title) }
-        end.to raise_error(NotImplementedError, /Sibling source resolution/)
+        end.to raise_error(GraphQL::Derivation::ConfigurationError, /no sibling resolver/)
       end
     end
 

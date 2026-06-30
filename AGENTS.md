@@ -72,6 +72,12 @@ present — there isn't one to rely on.
 - Rails/ActiveRecord code must stay behind `require` guards — core (`graphql/derivation`) must
   load and run with neither installed.
 
+## Git workflow
+
+`main` is branch-protected on GitHub (`oysterhr/graphql-ruby-derivation`) — direct pushes are
+rejected (`GH013: Repository rule violations ... Changes must be made through a pull request`).
+Always work on a feature branch and open a PR; never attempt `git push origin main` directly.
+
 ## Testing
 
 - RSpec, no real Rails app, no DB connection (SPEC.md §10). Fixture types live in

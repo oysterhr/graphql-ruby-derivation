@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require_relative 'lib/graphql/utils/version'
+require_relative 'lib/graphql/derivation/version'
 
 Gem::Specification.new do |spec|
   spec.name          = 'graphql-ruby-derivation'

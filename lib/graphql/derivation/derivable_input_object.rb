@@ -70,18 +70,17 @@ module GraphQL
           @derivation_pick_block = nil
         end
 
+        private
+
         # Internal escape hatch for the Rails ControllerConcern: its
         # auto-generated InputObjects DO have an action registry (the
         # controller class) to resolve Symbol siblings against, so they opt
-        # into Symbol sources by calling this before `derive_from`. User-defined
-        # DerivableInputObjects never call it, so §11.1's rejection still
-        # applies to them. Public because the ControllerConcern sets it on the
-        # generated class from the outside.
+        # into Symbol sources by calling this (via `send`, since it's private)
+        # before `derive_from`. User-defined DerivableInputObjects have no way
+        # to reach this, so §11.1's rejection still applies to them.
         def allow_sibling_sources!
           @allow_sibling_sources = true
         end
-
-        private
 
         # ArgumentDerivation builds arguments unattached (`owner: nil`) -- it
         # has no way to know which class will register them (SPEC.md §4.4:

@@ -208,7 +208,7 @@ module GraphQL
             # the registry that resolves them (SPEC.md §4.2). Opt in before
             # deriving so DerivableInputObject's §11.1 rejection does not fire
             # on the auto-generated InputObject.
-            input_object.allow_sibling_sources! if source.is_a?(Symbol)
+            input_object.send(:allow_sibling_sources!) if source.is_a?(Symbol)
             input_object.derive_from(source, &block)
           end
 

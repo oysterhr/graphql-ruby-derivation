@@ -12,6 +12,7 @@ require 'graphql/derivation/mappers/object_type_to_field'
 require 'graphql/derivation/engines/argument_derivation'
 require 'graphql/derivation/engines/field_derivation'
 require 'graphql/derivation/derivable_input_object'
+require 'graphql/derivation/derivable_object_type'
 
 module GraphQL
   module Derivation

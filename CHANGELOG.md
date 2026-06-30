@@ -23,3 +23,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `GraphQL::Derivation::DerivableInputObject` mixin: `derive_from` on `GraphQL::Schema::InputObject`
   subclasses, with deferred resolution via `resolve_all!`, collision detection against inline
   `argument` declarations, and idempotent re-resolution (SPEC §6).
+- `GraphQL::Derivation::DerivableObjectType` mixin: `derive_from` on `GraphQL::Schema::Object`
+  subclasses, with deferred resolution via `resolve_all!`, collision detection against inline
+  `field` declarations, and idempotent re-resolution (SPEC §7).

@@ -70,13 +70,14 @@ Rails or ActiveRecord are loaded unless the corresponding require path is used.
 lib/
   graphql-ruby-derivation.rb               # alias: require 'graphql/derivation'
   graphql/
-    utils/
+    derivation.rb
+    derivation/
       version.rb
       errors.rb
       pick_dsl/
         arguments.rb                  # PickArguments — pick.required, pick.optional, pick.override
         fields.rb                     # PickFields — pick.fields, pick.override
-      derivation/
+      engines/
         argument_derivation.rb        # ArgumentDerivation engine
         field_derivation.rb           # FieldDerivation engine
       mappers/
@@ -114,7 +115,7 @@ All errors live under `GraphQL::Derivation`. All inherit from `GraphQL::Derivati
 
 ```ruby
 module GraphQL
-  module Utils
+  module Derivation
     Error                  = Class.new(StandardError)
     ConfigurationError     = Class.new(Error)   # programming errors; raised at class load time
     CyclicDependencyError  = Class.new(ConfigurationError)

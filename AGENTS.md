@@ -20,6 +20,17 @@ shape, gemspec metadata, lint config). When scaffolding or hitting an undocument
 - Once a decision is made (by the user, or recorded below), don't re-litigate it — follow it.
 - Decisions made so far are recorded in this file. Update this file when new ones are made.
 
+## Keep SPEC.md's status table current
+
+SPEC.md opens with a "Table of Contents & Implementation Status" table (Specified / In Progress /
+Implemented / N/A per section). Whenever you start or finish implementing part of the spec:
+
+- Mark the relevant section **In Progress** when you open a PR for it.
+- Mark it **Implemented** in the same PR that merges the implementation — don't leave this for a
+  follow-up commit.
+- If a PR only partially implements a section, leave it **In Progress** and say what's left in
+  the PR description, rather than marking it Implemented early.
+
 ## Decisions on record
 
 - **Gemspec authors:** `Oyster HR Developers`, email `engineering-paperwork@oysterhr.com`.

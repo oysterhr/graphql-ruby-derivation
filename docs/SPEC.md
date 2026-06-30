@@ -674,6 +674,96 @@ correctly handled by Case 1 (method on object) or requires a Case 4.
 
 ---
 
+## 12. Development Environment (Nix)
+
+Development dependencies (Ruby interpreter, native libraries needed for C-extension gems, git
+hook runner) are provisioned via Nix, not via system Ruby/rbenv/rvm/asdf. Goal: identical,
+reproducible dev shell for every contributor and for CI, with no manual interpreter management.
+
+### 12.1 Toolchain Shape
+
+- **`flake.nix`** at repo root defines a single `devShells.default` output. `flake.lock` is
+  committed and is the pin — no floating nixpkgs refs.
+- **direnv** picks the shell up automatically. `.envrc` contains `use flake`. Contributors run
+  `direnv allow` once after clone.
+- No `shell.nix`/niv. This repo's dependency surface is small enough that flakes' lockfile alone
+  is sufficient; no need for the niv-based pinning anywhere's `anywhere` repo uses.
+
+### 12.2 Ruby Version
+
+Pinned to **Ruby 3.1** (nixpkgs `ruby_3_1` or equivalent), matching the gemspec's
+`required_ruby_version >= 3.1` floor (§1.1). The dev shell is deliberately the minimum-supported
+version, not the newest available, so that local development and CI both exercise the
+compatibility floor the gem promises. There is no separate "latest Ruby" shell variant — if
+multi-version compatibility testing is ever needed, that is a CI matrix concern (`ruby/setup-ruby`
+in a separate non-Nix CI job), not a dev-shell concern.
+
+### 12.3 Shell Contents
+
+The `devShells.default` derivation provides, at minimum:
+
+| Package | Purpose |
+|---|---|
+| `ruby_3_1` | Interpreter |
+| `bundler` | Dependency management (or use the bundler bundled with the nixpkgs ruby derivation if present) |
+| `libyaml` | Native dep for Ruby's YAML/Psych |
+| `openssl` | Native dep for any TLS-touching transitive gem |
+| `libxml2`, `libxslt` | Native deps for Nokogiri, pulled in transitively by `activesupport`/`actionpack` |
+| `zlib` | Native dep for common C-extension gems |
+| `pkg-config` | Build-time discovery of the above libraries |
+| `lefthook` | Git hook runner — installs the `pre-commit` hook that runs `rubocop` and `rspec` (see §12.5) |
+| `git` | Explicit pin so hook scripts don't depend on system git |
+
+No Node, Postgres, Redis, or other service dependencies — none are required per SPEC.md's
+dependency table (§1.2) or testing requirements (§10.5: no DB in the test suite).
+
+### 12.4 Shell Hook (Bundler Isolation)
+
+On shell entry, the flake's `shellHook`:
+- Runs `bundle config set --local path 'vendor/bundle'` so installed gems are vendored
+  per-repo-checkout rather than into a shared system/user gem path.
+- Does **not** auto-run `bundle install` — entering the shell should be fast and side-effect-free
+  beyond env setup. `bundle install` remains an explicit, separate step (documented in the
+  project README once scaffolded).
+- Installs lefthook git hooks (`lefthook install`), idempotently, swallowing errors if `.git` is
+  absent (e.g. when the flake is evaluated outside a git checkout, such as in some CI cache-warm
+  scenarios).
+
+### 12.5 Git Hooks (lefthook)
+
+A `lefthook.yml` at repo root defines a `pre-commit` group running `rubocop` (changed files only)
+and a `pre-push` group running the full `bundle exec rspec` suite. These mirror, but do not
+replace, the CI gate (§ AGENTS.md "Required before calling work done") — CI remains the
+authoritative check; hooks are a fast local pre-flight.
+
+### 12.6 CI Integration
+
+GitHub Actions CI (already decided: runs `bundle exec rspec` + `bundle exec rubocop`) provisions
+its environment via Nix rather than `ruby/setup-ruby`, so CI and local dev share the exact same
+toolchain definition:
+
+- A Nix-installer action (e.g. `cachix/install-nix-action` or equivalent) sets up Nix on the
+  runner.
+- The job runs subsequent steps inside the flake's dev shell, e.g. via
+  `nix develop --command bash -c '...'`, rather than installing Ruby directly.
+- A Nix binary cache step (e.g. Cachix or GitHub Actions cache keyed on `flake.lock`) is expected
+  to keep CI runtime reasonable — first-run cold-cache time is acceptable, steady-state should be
+  fast. Exact caching backend is an implementation detail, not specified further here.
+- `bundle install` still runs as an explicit CI step (same as local dev — the shell does not
+  auto-install gems), using the vendored `vendor/bundle` path so repeated runs can be cached by
+  `actions/cache` keyed on `Gemfile.lock`.
+
+### 12.7 What's Explicitly Out of Scope Here
+
+- Editor/IDE integration (e.g. `.tool-versions`, rbenv shims) — not provided; Nix shell is the
+  only supported path, consistent with "no manual interpreter management" goal above.
+- Cross-platform (non-Linux/macOS) support — not addressed; nixpkgs' standard Linux/Darwin
+  coverage is assumed sufficient.
+- Release/publish tooling (`gem push` credentials, trusted publishing) — unrelated to the dev
+  shell, deferred to a future spec section if/when this gem is published.
+
+---
+
 ## Appendix: Derivation Direction Rules
 
 ```

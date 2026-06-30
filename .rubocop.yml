@@ -306,12 +306,21 @@ Performance/Sum:
 # pick_dsl/arguments.rb and pick_dsl/fields.rb (matching the directory's own
 # arguments/fields naming, not the PickArguments/PickFields class names), so
 # their specs mirror that lib path rather than the class name.
+#
+# The engines/argument_derivation_spec.rb is excluded for the same reason:
+# SPEC.md §1.3 pins the lib file to engines/argument_derivation.rb (mirroring
+# the lib/engines/ directory), but `GraphQL::Derivation::ArgumentDerivation`
+# is a top-level module under `GraphQL::Derivation`, not nested under an
+# `Engines` namespace -- so the cop's class-name-derived expected path
+# (spec/graphql/derivation/argument_derivation_spec.rb) doesn't match the
+# intentional lib/spec directory mirroring.
 RSpec/SpecFilePathFormat:
   CustomTransform:
     GraphQL: graphql
   Exclude:
     - 'spec/graphql/derivation/pick_dsl/arguments_spec.rb'
     - 'spec/graphql/derivation/pick_dsl/fields_spec.rb'
+    - 'spec/graphql/derivation/engines/argument_derivation_spec.rb'
 
 RSpec/BeEq:
   Enabled: true

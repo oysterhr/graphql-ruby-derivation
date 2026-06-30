@@ -1,10 +1,14 @@
 # frozen_string_literal: true
 
+require 'graphql'
 require 'graphql/derivation/version'
 require 'graphql/derivation/errors'
 require 'graphql/derivation/pick_dsl/base'
 require 'graphql/derivation/pick_dsl/arguments'
 require 'graphql/derivation/pick_dsl/fields'
+require 'graphql/derivation/mappers/object_type_to_argument'
+require 'graphql/derivation/mappers/input_object_to_argument'
+require 'graphql/derivation/engines/argument_derivation'
 
 module GraphQL
   module Derivation

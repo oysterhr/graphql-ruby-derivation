@@ -23,6 +23,15 @@ Bundler/OrderedGems:
 Gemspec/OrderedDependencies:
   Enabled: true
 
+# SPEC.md §1.2 explicitly requires the optional Rails/AR dependencies
+# (activesupport, actionpack, ...) to be declared in the gemspec as
+# development dependencies (consumed via require guards), so the gem advertises
+# its optional integration surface in one place. This cop's "put dev deps in
+# the Gemfile" preference contradicts that recorded decision (AGENTS.md), so it
+# is disabled for the gemspec rather than worked around.
+Gemspec/DevelopmentDependencies:
+  Enabled: false
+
 Gemspec/RubyVersionGlobalsUsage:
   Enabled: true
 

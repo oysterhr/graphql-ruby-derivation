@@ -301,9 +301,17 @@ Performance/Sum:
 
 # Cop's default acronym-splitting heuristic would expect spec/graph_ql/*, but this codebase
 # follows graphql-ruby's own convention of treating "GraphQL" as a single capitalized word.
+#
+# The pick_dsl specs are excluded: SPEC.md §1.3 pins the lib files to
+# pick_dsl/arguments.rb and pick_dsl/fields.rb (matching the directory's own
+# arguments/fields naming, not the PickArguments/PickFields class names), so
+# their specs mirror that lib path rather than the class name.
 RSpec/SpecFilePathFormat:
   CustomTransform:
     GraphQL: graphql
+  Exclude:
+    - 'spec/graphql/derivation/pick_dsl/arguments_spec.rb'
+    - 'spec/graphql/derivation/pick_dsl/fields_spec.rb'
 
 RSpec/BeEq:
   Enabled: true

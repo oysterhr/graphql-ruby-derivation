@@ -18,7 +18,7 @@ corresponding row(s) in the same PR. See `AGENTS.md`.
 | Section | Status |
 |---|---|
 | [1. Gem Identity](#1-gem-identity) | Specified |
-| [2. Error Types](#2-error-types) | Specified |
+| [2. Error Types](#2-error-types) | Implemented |
 | [3. Pick DSL](#3-pick-dsl) | Specified |
 | [4. Argument Derivation Engine](#4-argument-derivation-engine) | Specified |
 | [5. Field Derivation Engine](#5-field-derivation-engine) | Specified |

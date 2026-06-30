@@ -6,6 +6,33 @@ Rails and ActiveRecord integration.
 
 ---
 
+## Table of Contents & Implementation Status
+
+Status legend: **Specified** (design done, no code yet) · **In Progress** (a PR is actively
+implementing it) · **Implemented** (merged to `main`) · **N/A** (reference/appendix material, not
+itself implementable).
+
+This table must be kept current — when a PR implementing part of the spec merges, update the
+corresponding row(s) in the same PR. See `AGENTS.md`.
+
+| Section | Status |
+|---|---|
+| [1. Gem Identity](#1-gem-identity) | Specified |
+| [2. Error Types](#2-error-types) | Specified |
+| [3. Pick DSL](#3-pick-dsl) | Specified |
+| [4. Argument Derivation Engine](#4-argument-derivation-engine) | Specified |
+| [5. Field Derivation Engine](#5-field-derivation-engine) | Specified |
+| [6. `DerivableInputObject`](#6-derivableinputobject) | Specified |
+| [7. `DerivableObjectType`](#7-derivableobjecttype) | Specified |
+| [8. Rails Plugin](#8-rails-plugin) | Specified |
+| [9. ActiveRecord Adapter](#9-activerecord-adapter) | Specified |
+| [10. Testing Requirements](#10-testing-requirements) | Specified |
+| [11. Open Questions (Deferred to Implementation)](#11-open-questions-deferred-to-implementation) | N/A |
+| [12. Development Environment (Nix)](#12-development-environment-nix) | In Progress |
+| [Appendix: Derivation Direction Rules](#appendix-derivation-direction-rules) | N/A |
+
+---
+
 ## 1. Gem Identity
 
 **Name:** `graphql-ruby-derivation`
@@ -691,12 +718,14 @@ reproducible dev shell for every contributor and for CI, with no manual interpre
 
 ### 12.2 Ruby Version
 
-Pinned to **Ruby 3.1** (nixpkgs `ruby_3_1` or equivalent), matching the gemspec's
-`required_ruby_version >= 3.1` floor (§1.1). The dev shell is deliberately the minimum-supported
-version, not the newest available, so that local development and CI both exercise the
-compatibility floor the gem promises. There is no separate "latest Ruby" shell variant — if
-multi-version compatibility testing is ever needed, that is a CI matrix concern (`ruby/setup-ruby`
-in a separate non-Nix CI job), not a dev-shell concern.
+Pinned to **Ruby 3.4** (nixpkgs `ruby_3_4`), matching Oyster's `anywhere` repo. This diverges from
+the gemspec's `required_ruby_version >= 3.1` floor (§1.1) for a practical reason: nixpkgs-unstable
+has removed `ruby_3_1` and `ruby_3_2` (upstream EOL — see nixpkgs `aliases.nix`), so the original
+"dev shell pins to the compatibility floor" intent isn't achievable without pinning to a stale,
+unmaintained nixpkgs snapshot. `ruby_3_3` is the oldest version nixpkgs-unstable still carries;
+`3.4` is chosen over `3.3` for parity with Oyster's other repos. The gemspec floor (3.1) remains
+the documented minimum supported version — verifying that floor, if ever needed, is a CI matrix
+concern (`ruby/setup-ruby` in a separate non-Nix CI job), not a dev-shell concern.
 
 ### 12.3 Shell Contents
 
@@ -704,7 +733,7 @@ The `devShells.default` derivation provides, at minimum:
 
 | Package | Purpose |
 |---|---|
-| `ruby_3_1` | Interpreter |
+| `ruby_3_4` | Interpreter |
 | `bundler` | Dependency management (or use the bundler bundled with the nixpkgs ruby derivation if present) |
 | `libyaml` | Native dep for Ruby's YAML/Psych |
 | `openssl` | Native dep for any TLS-touching transitive gem |

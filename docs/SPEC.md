@@ -22,7 +22,7 @@ corresponding row(s) in the same PR. See `AGENTS.md`.
 | [3. Pick DSL](#3-pick-dsl) | Implemented |
 | [4. Argument Derivation Engine](#4-argument-derivation-engine) | In Progress |
 | [5. Field Derivation Engine](#5-field-derivation-engine) | In Progress |
-| [6. `DerivableInputObject`](#6-derivableinputobject) | Specified |
+| [6. `DerivableInputObject`](#6-derivableinputobject) | Implemented |
 | [7. `DerivableObjectType`](#7-derivableobjecttype) | Specified |
 | [8. Rails Plugin](#8-rails-plugin) | Specified |
 | [9. ActiveRecord Adapter](#9-activerecord-adapter) | Specified |

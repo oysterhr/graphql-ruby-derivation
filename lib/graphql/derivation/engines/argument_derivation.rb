@@ -11,6 +11,14 @@ module GraphQL
     # configured `GraphQL::Schema::Argument` instances (unregistered -- the
     # caller registers them on the target InputObject).
     module ArgumentDerivation
+      # SPEC.md §4.2 "Sibling source": a candidate carrying an already-resolved
+      # `GraphQL::Schema::Argument` from the sibling action's argument set. Type
+      # mapping is identity -- the sibling argument's own type is reused
+      # directly (the sibling has already gone through derivation, so its type
+      # is final). Mirrors the other mappers' `Candidate.type` contract so
+      # `resolve_type` can treat it uniformly.
+      SiblingCandidate = Struct.new(:type)
+
       module_function
 
       # @param source [Class, Symbol] An ObjectType class
@@ -18,6 +26,15 @@ module GraphQL
       #   (`< GraphQL::Schema::InputObject`), or a Symbol naming a sibling
       #   action (SPEC.md §4.1).
       # @param pick_block [Proc] Called with a `PickArguments` instance.
+      # @param context [#resolve_sibling_arguments, nil] Only consulted when
+      #   `source` is a Symbol (sibling action). The contract: `context` must
+      #   respond to `resolve_sibling_arguments(symbol)` and return an Array of
+      #   already-resolved `GraphQL::Schema::Argument` instances (the sibling
+      #   action's argument set). The Rails ControllerConcern passes the
+      #   controller class here, since that class holds the action registry
+      #   (SPEC.md §4.2, §8). Callers deriving from ObjectType/InputObject
+      #   sources need not pass it (it defaults to nil, keeping existing
+      #   non-Rails callers unchanged).
       # @return [Array<GraphQL::Schema::Argument>]
       def resolve(source, pick_block, context: nil)
         candidates = enumerate_candidates(source, context)
@@ -62,17 +79,30 @@ module GraphQL
         source.is_a?(Class) && source < GraphQL::Schema::InputObject
       end
 
-      # SPEC.md §4.1/§4.2: Symbol sources are resolved via the
-      # ControllerConcern's class-level sibling registry (SPEC.md §8, Rails
-      # Plugin). That registry does not exist yet -- it is built as part of
-      # the §8 Rails Plugin PR, not this one (see PR description for the
-      # §4 status rationale). Resolving a Symbol source here is therefore
-      # deferred and currently unsupported.
-      def sibling_candidates(_source, _context)
-        raise NotImplementedError,
-          'Sibling source resolution (Symbol sources) is deferred to the Rails Plugin ' \
-          '(SPEC.md §8, ControllerConcern registry), which does not exist yet. ' \
-          'This is a known gap tracked against SPEC.md §4\'s "In Progress" status.'
+      # SPEC.md §4.1/§4.2: Symbol sources name a sibling action. Resolution is
+      # deferred -- the sibling's argument set is looked up at resolution time
+      # via the `context` object's `resolve_sibling_arguments` contract (see
+      # `.resolve`'s docs). The ControllerConcern (SPEC.md §8) passes the
+      # controller class as `context`; the controller walks its own
+      # action registry (and ancestors') to produce the sibling's resolved
+      # `GraphQL::Schema::Argument` instances. Each becomes an identity-mapped
+      # candidate keyed by its Ruby keyword.
+      def sibling_candidates(source, context)
+        unless context.respond_to?(:resolve_sibling_arguments)
+          raise GraphQL::Derivation::ConfigurationError,
+            "Cannot resolve sibling source #{source.inspect}: no sibling resolver was supplied. " \
+            'Symbol sources are only usable from the Rails ControllerConcern, which passes the ' \
+            'controller class as `context:` (SPEC.md §4.2, §8).'
+        end
+
+        context.resolve_sibling_arguments(source).each_with_object({}) do |argument, result|
+          # `required:` from this pick block (re)controls nullability, so the
+          # sibling argument's own NonNull wrapper must not leak through; only
+          # the unwrapped (and re-listed, if a list) type is reused -- the same
+          # treatment InputObjectToArgument applies to identity-mapped types.
+          type = argument.type.list? ? [argument.type.unwrap] : argument.type.unwrap
+          result[argument.keyword] = SiblingCandidate.new(type)
+        end
       end
 
       # SPEC.md §4.4's `build_argument` step. `candidate` is either a plain
@@ -93,6 +123,7 @@ module GraphQL
       def resolve_type(name, candidate, overrides)
         return candidate.type if candidate.is_a?(Mappers::ObjectTypeToArgument::Candidate)
         return candidate.type if candidate.is_a?(Mappers::InputObjectToArgument::Candidate)
+        return candidate.type if candidate.is_a?(SiblingCandidate)
 
         # NestedObjectCandidate: only eligible if `input_type:` was supplied
         # via `pick.override` (SPEC.md §4.3's Object-type row).

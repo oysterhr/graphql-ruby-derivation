@@ -34,3 +34,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `MissingInputTypeError` (load-time) and `ArgumentParsingError` (request-time) errors (SPEC §8).
   `activesupport` and `actionpack` (`~> 7.0`) are declared as optional development dependencies,
   consumed only through this require path (core stays Rails-free).
+
+### Fixed
+
+- `DerivableInputObject`-derived arguments are now built with their owning InputObject class
+  attached. Previously they were registered with `owner: nil`, which made `coerce_input` raise
+  on any derived InputObject (SPEC §6).

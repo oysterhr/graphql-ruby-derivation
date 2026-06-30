@@ -20,11 +20,11 @@ corresponding row(s) in the same PR. See `AGENTS.md`.
 | [1. Gem Identity](#1-gem-identity) | Specified |
 | [2. Error Types](#2-error-types) | Implemented |
 | [3. Pick DSL](#3-pick-dsl) | Implemented |
-| [4. Argument Derivation Engine](#4-argument-derivation-engine) | In Progress |
+| [4. Argument Derivation Engine](#4-argument-derivation-engine) | Implemented |
 | [5. Field Derivation Engine](#5-field-derivation-engine) | In Progress |
 | [6. `DerivableInputObject`](#6-derivableinputobject) | Implemented |
 | [7. `DerivableObjectType`](#7-derivableobjecttype) | Implemented |
-| [8. Rails Plugin](#8-rails-plugin) | Specified |
+| [8. Rails Plugin](#8-rails-plugin) | Implemented |
 | [9. ActiveRecord Adapter](#9-activerecord-adapter) | Specified |
 | [10. Testing Requirements](#10-testing-requirements) | Specified |
 | [11. Open Questions (Deferred to Implementation)](#11-open-questions-deferred-to-implementation) | N/A |

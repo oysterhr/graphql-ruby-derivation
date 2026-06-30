@@ -29,5 +29,14 @@ Gem::Specification.new do |spec|
 
   spec.add_dependency 'graphql', '~> 2.0'
 
+  # SPEC.md §1.2: the Rails plugin (`graphql/derivation/rails`) depends on
+  # activesupport + actionpack, but they are *optional* -- consumed via require
+  # guards, never loaded by core (`graphql/derivation`). They are declared as
+  # development dependencies so the test suite can load and stub
+  # `ActionController::Base`, without forcing them on consumers who only use the
+  # core require path.
+  spec.add_development_dependency 'actionpack', '~> 7.0'
+  spec.add_development_dependency 'activesupport', '~> 7.0'
+
   spec.metadata['rubygems_mfa_required'] = 'true'
 end

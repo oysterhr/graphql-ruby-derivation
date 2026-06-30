@@ -321,6 +321,7 @@ RSpec/SpecFilePathFormat:
     - 'spec/graphql/derivation/pick_dsl/arguments_spec.rb'
     - 'spec/graphql/derivation/pick_dsl/fields_spec.rb'
     - 'spec/graphql/derivation/engines/argument_derivation_spec.rb'
+    - 'spec/graphql/derivation/engines/field_derivation_spec.rb'
 
 RSpec/BeEq:
   Enabled: true

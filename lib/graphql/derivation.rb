@@ -8,7 +8,9 @@ require 'graphql/derivation/pick_dsl/arguments'
 require 'graphql/derivation/pick_dsl/fields'
 require 'graphql/derivation/mappers/object_type_to_argument'
 require 'graphql/derivation/mappers/input_object_to_argument'
+require 'graphql/derivation/mappers/object_type_to_field'
 require 'graphql/derivation/engines/argument_derivation'
+require 'graphql/derivation/engines/field_derivation'
 
 module GraphQL
   module Derivation

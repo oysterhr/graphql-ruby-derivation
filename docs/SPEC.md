@@ -21,7 +21,7 @@ corresponding row(s) in the same PR. See `AGENTS.md`.
 | [2. Error Types](#2-error-types) | Implemented |
 | [3. Pick DSL](#3-pick-dsl) | Implemented |
 | [4. Argument Derivation Engine](#4-argument-derivation-engine) | In Progress |
-| [5. Field Derivation Engine](#5-field-derivation-engine) | Specified |
+| [5. Field Derivation Engine](#5-field-derivation-engine) | In Progress |
 | [6. `DerivableInputObject`](#6-derivableinputobject) | Specified |
 | [7. `DerivableObjectType`](#7-derivableobjecttype) | Specified |
 | [8. Rails Plugin](#8-rails-plugin) | Specified |

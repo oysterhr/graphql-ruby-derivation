@@ -36,6 +36,7 @@ Gem::Specification.new do |spec|
   # `ActionController::Base`, without forcing them on consumers who only use the
   # core require path.
   spec.add_development_dependency 'actionpack', '~> 7.0'
+  spec.add_development_dependency 'activerecord', '~> 7.0'
   spec.add_development_dependency 'activesupport', '~> 7.0'
 
   spec.metadata['rubygems_mfa_required'] = 'true'

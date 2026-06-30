@@ -27,8 +27,22 @@ module FixtureSchema
   #                                        matches a defined_enums key" branch of §9.2,
   #                                        as distinct from a native Postgres :enum column)
   #   metadata     :jsonb    nullable  -- unsupported -> UnsupportedColumnTypeError
-  #   approver_ids :array    nullable  -- array of unsupported element -> UnsupportedColumnTypeError
-  Column = Struct.new(:name, :type, :null)
+  #   approver_ids :array    nullable  -- array of unsupported element (jsonb[]) ->
+  #                                        UnsupportedColumnTypeError
+  #   tag_names    :array    nullable  -- array of supported element (:string, via
+  #                                        `sql_type` "character varying[]") -> [String]
+  #   team_member_id :bigint not null  -- foreign key by *_id naming convention; §9.1's
+  #                                        type-based table would map a bare :bigint to
+  #                                        GraphQL::Types::Int, but §9.4 calls out FK columns
+  #                                        as mapping to GraphQL::Types::ID -- see
+  #                                        ActiveRecordMapper's `foreign_key_column?` for the
+  #                                        name-based override rule applied here.
+  #
+  # `sql_type` mirrors `ActiveRecord::ConnectionAdapters::Column#sql_type`: only
+  # meaningful (and only set below) for `:array` columns, where the ActiveRecord
+  # adapter parses the element type from it (Rails' own convention is
+  # `"<element sql type>[]"`, e.g. `"character varying[]"`).
+  Column = Struct.new(:name, :type, :null, :sql_type)
 
   class Expense
     COLUMNS = [
@@ -45,7 +59,9 @@ module FixtureSchema
       Column.new('external_uuid', :uuid, true),
       Column.new('category', :integer, false),
       Column.new('metadata', :jsonb, true),
-      Column.new('approver_ids', :array, true),
+      Column.new('approver_ids', :array, true, 'jsonb[]'),
+      Column.new('tag_names', :array, true, 'character varying[]'),
+      Column.new('team_member_id', :bigint, false),
     ].freeze
 
     DEFINED_ENUMS = {

@@ -68,3 +68,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `DerivableInputObject`-derived arguments are now built with their owning InputObject class
   attached. Previously they were registered with `owner: nil`, which made `coerce_input` raise
   on any derived InputObject (SPEC §6).
+- `resolve_derivation!` (both `DerivableInputObject` and `DerivableObjectType`) now recursively
+  resolves a `derive_from` source's own pending derivation, if it is itself Derivable, before
+  reading its `.arguments`/`.fields`. Previously resolution was a flat, single pass over each
+  mixin's `included_classes` in inclusion order, so a valid `A.derive_from(B)` /
+  `B.derive_from(SomeSource)` chain would silently succeed or raise `ConfigurationError` purely
+  based on which class happened to be included first -- non-deterministic under autoloading or
+  spec-order randomization. Resolution order no longer matters (SPEC §6.2/§7.2).
+- A genuine `derive_from` cycle (e.g. `A.derive_from(B)`, `B.derive_from(A)`) now raises
+  `GraphQL::Derivation::CyclicDependencyError` with the full cycle path (e.g.
+  `Cyclic derive_from dependency: A → B → A`), via a new shared
+  `GraphQL::Derivation::DerivationResolutionGuard` in-progress stack consulted by both
+  `DerivableInputObject` and `DerivableObjectType` (so a cycle crossing both mixins is caught too).
+  Previously this surfaced as a misleading "does not define it, available names: ∅" error,
+  indistinguishable from a typo or an empty source.

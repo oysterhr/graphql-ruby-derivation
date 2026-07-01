@@ -35,7 +35,12 @@ module GraphQL
       # source's type. AR-model sources are detected without referencing
       # `ActiveRecord` unless it is already loaded (core must load/run with
       # neither Rails nor ActiveRecord present -- AGENTS.md). Any other
-      # source raises `ArgumentError` immediately (i.e. at declaration time).
+      # source raises `ArgumentError` immediately, as soon as `.resolve` runs.
+      # Note this is at *resolution* time for `DerivableObjectType#derive_from`
+      # sources (SPEC.md §3.1: the source/pick block are stored unevaluated
+      # at declaration time and only checked once resolution fires) -- not at
+      # `derive_from`'s own declaration-time call, which does no source-type
+      # validation of its own.
       def enumerate_candidates(source)
         if object_type_source?(source)
           Mappers::ObjectTypeToField.candidates(source)

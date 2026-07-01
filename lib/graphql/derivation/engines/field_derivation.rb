@@ -91,7 +91,15 @@ module GraphQL
       # graphql_name (if the source responds to it) or `#inspect`, since
       # `Class#name` is nil for them.
       def source_name(source)
-        source.name || (source.respond_to?(:graphql_name) ? source.graphql_name : nil) || source.inspect
+        # `graphql_name` is declared via `respond_to?` on every GraphQL::Schema
+        # member, but calling it raises `RequiredImplementationMissingError`
+        # for anonymous types that never set one -- rescue so the `#inspect`
+        # fallback below is actually reachable in that case.
+        source.name || begin
+          source.graphql_name if source.respond_to?(:graphql_name)
+        rescue GraphQL::RequiredImplementationMissingError
+          nil
+        end || source.inspect
       end
 
       # SPEC.md §5.4's `check_resolver!` step. Raises `UnresolvableFieldError`

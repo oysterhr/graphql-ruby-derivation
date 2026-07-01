@@ -209,5 +209,17 @@ RSpec.describe GraphQL::Derivation::ArgumentDerivation do
         end.to raise_error(GraphQL::Derivation::ConfigurationError, /selected/)
       end
     end
+
+    context 'with a bare anonymous ObjectType source (no graphql_name declared)' do
+      it 'falls back to #inspect instead of raising RequiredImplementationMissingError' do
+        anonymous_type = Class.new(GraphQL::Schema::Object) do
+          field :title, String, null: true
+        end
+
+        expect do
+          resolve(anonymous_type) { |pick| pick.required(:bogus) }
+        end.to raise_error(GraphQL::Derivation::ConfigurationError, /does not define it/)
+      end
+    end
   end
 end

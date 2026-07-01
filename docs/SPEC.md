@@ -387,6 +387,13 @@ end
   inline. They appear in introspection like any other argument.
 - Inline `argument` declarations may coexist with `derive_from`. If an inline `argument` names
   a field also present in the derivation, `ConfigurationError` is raised at resolution time.
+- If the `derive_from` source is itself Derivable (another `DerivableInputObject` or
+  `DerivableObjectType` class with a pending derivation), its own derivation is resolved first,
+  recursively, before this class's arguments are derived from it. Resolution is therefore order
+  -independent: it does not matter which class happens to be included, declared, or resolved
+  first. A cycle anywhere in the `derive_from` graph (including one that crosses both mixins)
+  raises `CyclicDependencyError` with the full cycle path, instead of silently resolving against
+  a partially-resolved or empty source.
 
 ### 6.3 Resolution Trigger
 
@@ -439,6 +446,10 @@ end
 - Resolved fields are registered on the ObjectType class via `field` as if declared inline.
 - Inline `field` declarations may coexist with `derive_from`. If an inline `field` names a
   field also produced by the derivation, `ConfigurationError` is raised at resolution time.
+- Same recursive-resolution and cycle-detection guarantee as §6.2: if the `derive_from` source is
+  itself Derivable, its own pending derivation resolves first, resolution order does not matter,
+  and any cycle (including one crossing both `DerivableInputObject` and `DerivableObjectType`)
+  raises `CyclicDependencyError` with the full cycle path.
 
 ### 7.3 Resolution Trigger
 

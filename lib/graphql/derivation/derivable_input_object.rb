@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'graphql/derivation/engines/argument_derivation'
+require 'graphql/derivation/derivation_resolution_guard'
 
 module GraphQL
   module Derivation
@@ -48,15 +49,46 @@ module GraphQL
 
         # SPEC.md §6.3: resolves this class's pending derivation, if any.
         # Idempotent -- a second call is a no-op once resolution has
-        # happened (or if `derive_from` was never called).
+        # happened (or if `derive_from` was never called). The early-return
+        # check above happens BEFORE the cycle guard is engaged, so
+        # resolving an already-finished dependency never touches the
+        # in-progress stack -- only a derivation that is genuinely being
+        # computed right now participates in cycle detection.
+        #
+        # If `@derivation_source` is itself Derivable (i.e. responds to
+        # `resolve_derivation!` -- another `DerivableInputObject` or
+        # `DerivableObjectType` class), its own derivation is resolved
+        # FIRST, recursively, before `ArgumentDerivation.resolve` reads its
+        # `.arguments`. This makes resolution order-independent: a source
+        # always finishes resolving before its dependent does, regardless of
+        # which class happened to be included/declared first. Both this
+        # recursive call and this class's own resolution are wrapped in
+        # `DerivationResolutionGuard.guard`, which shares its in-progress
+        # stack with `DerivableObjectType` -- so a cycle is caught even if it
+        # crosses both mixins (e.g. an ArgumentDerivation ObjectType-source
+        # that is itself a pending DerivableObjectType).
         #
         # @param context [#resolve_sibling_arguments, nil] forwarded to
         #   ArgumentDerivation for Symbol (sibling action) sources. Only the
         #   Rails ControllerConcern (SPEC.md §8) supplies this -- ordinary
         #   InputObjects never use Symbol sources (SPEC.md §11.1), so the
-        #   default of nil keeps non-Rails callers unchanged.
+        #   default of nil keeps non-Rails callers unchanged. Also forwarded
+        #   to a Derivable source's own recursive `resolve_derivation!` call,
+        #   in case that source is itself part of the same Rails-generated,
+        #   context-carrying chain -- harmless (defaults to nil) for the
+        #   ordinary ObjectType/InputObject-source case.
         def resolve_derivation!(context: nil)
           return unless defined?(@derivation_pick_block) && @derivation_pick_block
+
+          GraphQL::Derivation::DerivationResolutionGuard.guard(self) { resolve_pending_derivation!(context) }
+        end
+
+        private
+
+        # The guarded body of `resolve_derivation!`, split out so the public
+        # method itself stays a short guard-then-delegate wrapper.
+        def resolve_pending_derivation!(context)
+          resolve_source_derivation!(context)
 
           pre_existing_names = arguments.keys
 
@@ -70,7 +102,18 @@ module GraphQL
           @derivation_pick_block = nil
         end
 
-        private
+        # Ensures `@derivation_source`'s own derivation (if it is Derivable)
+        # has resolved before this class reads its `.arguments`. Runs BEFORE
+        # `ArgumentDerivation.resolve` is called, from inside the cycle
+        # guard, so a source that is mid-resolution (a true cycle) raises
+        # `CyclicDependencyError` from `DerivationResolutionGuard.guard`
+        # instead of this class silently reading the source's
+        # not-yet-registered (i.e. empty) arguments.
+        def resolve_source_derivation!(context)
+          return unless @derivation_source.respond_to?(:resolve_derivation!)
+
+          @derivation_source.resolve_derivation!(context: context)
+        end
 
         # Internal escape hatch for the Rails ControllerConcern: its
         # auto-generated InputObjects DO have an action registry (the

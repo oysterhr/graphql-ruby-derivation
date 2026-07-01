@@ -46,6 +46,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   primary key) is mapped to `GraphQL::Types::ID` instead of `GraphQL::Types::Int` whenever its
   underlying type would otherwise resolve to `Int`. `activerecord` (`~> 7.0`) is declared as an
   optional development dependency, consumed only through this require path.
+- `GraphQL::Derivation::Rails.reset_for_reload!`: a reload-safety utility for Rails apps running
+  with class reloading enabled (dev/test). Clears `DerivableInputObject.included_classes`,
+  `DerivableObjectType.included_classes` (via new `.clear!` methods on both), all cached
+  per-namespace `ArgumentSchema`s, and (if loaded) `ActiveRecordMapper.enum_cache`. Not
+  auto-wired into anything -- intended to be called explicitly from
+  `Rails.application.reloader.before_class_unload` (SPEC §8.2/§9.2).
 
 ### Changed
 
@@ -82,3 +88,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `DerivableInputObject` and `DerivableObjectType` (so a cycle crossing both mixins is caught too).
   Previously this surfaced as a misleading "does not define it, available names: ∅" error,
   indistinguishable from a typo or an empty source.
+- `ArgumentSchema#register_input_object` now de-duplicates by `graphql_name`, not object
+  identity. Previously, `ControllerConcern`'s auto-generated InputObjects (which have stable
+  `graphql_name`s but are rebuilt as new class objects on every Rails class reload) would
+  accumulate a second registered type with the same name after each reload, since identity-based
+  `include?` never matched the new object -- crashing the next `to_definition`/introspection/
+  schema-validation call with `GraphQL::Schema::DuplicateNamesError`. Re-registering under an
+  already-registered name now replaces the prior entry with the new one; registering the exact
+  same object twice remains a safe no-op (SPEC §8.2).
+- `ActiveRecordMapper.enum_cache` is now keyed by `[model.name, column_name]` (a String key) and
+  additionally guards against a stale hit by comparing the cached entry's model class object with
+  `equal?`. Previously the cache was keyed by `[model, column_name]` (the model class object
+  itself), so a Rails class reload -- which produces a new model class object with the same
+  `.name` -- never matched the old cache entry: it leaked a stale entry per reload and generated a
+  new enum class with the exact same `graphql_name` (derived from `model.name`), risking the same
+  `GraphQL::Schema::DuplicateNamesError` crash as the `ArgumentSchema` issue above if the old enum
+  class stayed reachable (SPEC §9.2).

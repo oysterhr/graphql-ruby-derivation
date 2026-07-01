@@ -31,6 +31,20 @@ module GraphQL
         def resolve_all!
           included_classes.each(&:resolve_derivation!)
         end
+
+        # Reload-safety seam (not part of the ordinary runtime API): forgets
+        # every class registered via the `included` hook. `included_classes`
+        # is a plain module-level Array with no unload hook, so under Rails
+        # class reloading, every reload of a class that includes this mixin
+        # leaves the OLD class object here forever (an unbounded leak across
+        # the process lifetime) -- and keeps it reachable, which is what lets
+        # stale generated types (e.g. `ActiveRecordMapper`'s enum classes)
+        # linger long enough to collide with their reloaded replacements. See
+        # `GraphQL::Derivation::Rails.reset_for_reload!`, which calls this
+        # from a Rails app's `Rails.application.reloader.before_class_unload`.
+        def clear!
+          @included_classes = []
+        end
       end
 
       # Class-level API mixed into `GraphQL::Schema::InputObject` subclasses.

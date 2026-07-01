@@ -149,7 +149,10 @@ RSpec.describe GraphQL::Derivation::DerivableInputObject do
 
       expect do
         input_class.derive_from(FixtureSchema::ExpenseType) { |pick| pick.required(:description) }
-      end.to raise_error(GraphQL::Derivation::ConfigurationError, /at most once/)
+      end.to raise_error(
+        GraphQL::Derivation::ConfigurationError,
+        /already called derive_from.*at most once.*remove the duplicate/im,
+      )
     end
 
     it 'raises ArgumentError immediately when given a Symbol source' do

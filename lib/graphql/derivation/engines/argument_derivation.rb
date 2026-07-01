@@ -80,7 +80,15 @@ module GraphQL
       def source_name(source)
         return source.inspect if source.is_a?(Symbol)
 
-        source.name || (source.respond_to?(:graphql_name) ? source.graphql_name : nil) || source.inspect
+        # `graphql_name` is declared via `respond_to?` on every GraphQL::Schema
+        # member, but calling it raises `RequiredImplementationMissingError`
+        # for anonymous types that never set one -- rescue so the `#inspect`
+        # fallback below is actually reachable in that case.
+        source.name || begin
+          source.graphql_name if source.respond_to?(:graphql_name)
+        rescue GraphQL::RequiredImplementationMissingError
+          nil
+        end || source.inspect
       end
 
       def object_type_source?(source)

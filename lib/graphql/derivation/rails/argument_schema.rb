@@ -34,12 +34,41 @@ module GraphQL
           attr_reader :argument_namespace
 
           # Registers an anonymous InputObject as an orphan/extra type so it
-          # shows up in this schema's SDL for codegen. Idempotent: re-registering
-          # the same class is a no-op.
+          # shows up in this schema's SDL for codegen.
+          #
+          # De-duplicates by `graphql_name`, not object identity. Rails class
+          # reloading (Zeitwerk) rebuilds `ControllerConcern`'s anonymous
+          # InputObject as a brand-new class object on every reload, but with
+          # the SAME computed `graphql_name` (derived from the stable
+          # controller/action names). This schema is cached for the process
+          # lifetime (`ArgumentSchema.for`), so without name-based dedup, each
+          # reload would append a second class with the same `graphql_name` to
+          # `registered_input_objects`, and `extra_types` would carry both --
+          # raising `GraphQL::Schema::DuplicateNamesError` on the next
+          # `to_definition`/validation/introspection call.
+          #
+          # Behaviour: registering a never-seen `graphql_name` appends as
+          # before. Registering a `graphql_name` that is already present
+          # REPLACES the existing entry with the new class object -- this is
+          # what makes a reload-driven redefinition safe. Registering the
+          # exact same object twice is therefore also safe: it replaces
+          # itself, a no-op in effect. Either way, the list ends up with
+          # exactly one entry per `graphql_name`, always the most recently
+          # registered class.
+          #
+          # `GraphQL::Schema.extra_types` (graphql-ruby core) only ever
+          # CONCATS onto its own internal `@own_extra_types` list -- it has
+          # no replace semantics of its own. So re-registering under an
+          # already-seen `graphql_name` would still leave graphql-ruby's own
+          # internal list holding both the old and new class objects (and
+          # `to_definition` would print the type twice) even though our own
+          # `registered_input_objects` is correctly deduped. `@own_extra_types`
+          # is reset here before re-adding the deduped list, so graphql-ruby's
+          # internal state always mirrors `registered_input_objects` exactly.
           def register_input_object(input_object_class)
-            return if registered_input_objects.include?(input_object_class)
-
+            registered_input_objects.reject! { |existing| existing.graphql_name == input_object_class.graphql_name }
             registered_input_objects << input_object_class
+            @own_extra_types = []
             extra_types(*registered_input_objects)
           end
 

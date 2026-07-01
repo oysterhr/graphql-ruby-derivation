@@ -67,12 +67,21 @@ module GraphQL
 
         private
 
+        # PR #13 review (khamusa) questioned whether this restriction should
+        # be relaxed, mirroring the same question raised on
+        # DerivableInputObject (PR #11). Deliberately deferred, for the same
+        # reason: SPEC.md §7.2 states derive_from may be called at most once
+        # per class, and relaxing that is a spec-level behavior change that
+        # needs a real use case, not something to slip in as a
+        # message-quality fix. Only the error message below was improved.
         def check_not_already_derived!
           return unless defined?(@derivation_source) && @derivation_source
 
           raise GraphQL::Derivation::ConfigurationError,
-            "derive_from has already been called on #{self}. " \
-            'derive_from may be called at most once per class (SPEC.md §7.2).'
+            "#{self} already called derive_from(#{@derivation_source.inspect}). " \
+            'derive_from may be called at most once per class (SPEC.md §7.2) -- remove the ' \
+            'duplicate call, or fold any extra fields into the existing derive_from block ' \
+            '(or into inline `field` declarations alongside it).'
         end
 
         # SPEC.md §7.2: inline `field` declarations may coexist with
@@ -83,9 +92,12 @@ module GraphQL
           collisions = derived_fields.map(&:graphql_name) & pre_existing_names
           return if collisions.empty?
 
+          names = collisions.sort.join(', ')
           raise GraphQL::Derivation::ConfigurationError,
-            "derive_from on #{self} collides with inline field(s) already declared: " \
-            "#{collisions.inspect}"
+            "#{self} already defines #{collisions.size == 1 ? 'a field' : 'fields'} named " \
+            "#{names} inline, so derive_from(#{@derivation_source.inspect}) cannot also derive " \
+            "#{collisions.size == 1 ? 'a field' : 'fields'} with that name. Remove the inline " \
+            'declaration, or exclude that name from the derive_from pick block.'
         end
       end
     end

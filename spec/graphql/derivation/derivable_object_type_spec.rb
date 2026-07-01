@@ -90,7 +90,8 @@ RSpec.describe GraphQL::Derivation::DerivableObjectType do
       end
 
       expect { object_class.resolve_derivation! }.to raise_error(
-        GraphQL::Derivation::ConfigurationError, /title/,
+        GraphQL::Derivation::ConfigurationError,
+        /already defines a field named title inline.*remove the inline declaration/im,
       )
     end
 
@@ -121,7 +122,10 @@ RSpec.describe GraphQL::Derivation::DerivableObjectType do
 
       expect do
         object_class.derive_from(FixtureSchema::ExpenseType) { |pick| pick.fields(:description) }
-      end.to raise_error(GraphQL::Derivation::ConfigurationError, /at most once/)
+      end.to raise_error(
+        GraphQL::Derivation::ConfigurationError,
+        /already called derive_from.*at most once.*remove the duplicate/im,
+      )
     end
   end
 

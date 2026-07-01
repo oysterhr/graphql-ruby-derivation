@@ -97,12 +97,22 @@ module GraphQL
           add_argument(argument)
         end
 
+        # PR #11 review (khamusa) questioned whether this restriction should
+        # be relaxed -- e.g. to allow re-opening a class and calling
+        # `derive_from` again before resolution has happened, since reopening
+        # classes is common in Ruby. Deliberately deferred: SPEC.md §6.2
+        # states derive_from may be called at most once per class, and
+        # relaxing that is a spec-level behavior change that needs a real
+        # use case, not something to slip in as a message-quality fix. Only
+        # the error message below was improved.
         def check_not_already_derived!
           return unless defined?(@derivation_source) && @derivation_source
 
           raise GraphQL::Derivation::ConfigurationError,
-            "derive_from has already been called on #{self}. " \
-            'derive_from may be called at most once per class (SPEC.md §6.2).'
+            "#{self} already called derive_from(#{@derivation_source.inspect}). " \
+            'derive_from may be called at most once per class (SPEC.md §6.2) -- remove the ' \
+            'duplicate call, or fold any extra fields into the existing derive_from block ' \
+            '(or into inline `argument` declarations alongside it).'
         end
 
         # SPEC.md §11.1: sibling (Symbol) sources have no natural

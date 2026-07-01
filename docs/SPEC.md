@@ -20,12 +20,12 @@ corresponding row(s) in the same PR. See `AGENTS.md`.
 | [1. Gem Identity](#1-gem-identity) | Specified |
 | [2. Error Types](#2-error-types) | Implemented |
 | [3. Pick DSL](#3-pick-dsl) | Implemented |
-| [4. Argument Derivation Engine](#4-argument-derivation-engine) | Specified |
-| [5. Field Derivation Engine](#5-field-derivation-engine) | Specified |
-| [6. `DerivableInputObject`](#6-derivableinputobject) | Specified |
-| [7. `DerivableObjectType`](#7-derivableobjecttype) | Specified |
-| [8. Rails Plugin](#8-rails-plugin) | Specified |
-| [9. ActiveRecord Adapter](#9-activerecord-adapter) | Specified |
+| [4. Argument Derivation Engine](#4-argument-derivation-engine) | Implemented |
+| [5. Field Derivation Engine](#5-field-derivation-engine) | Implemented |
+| [6. `DerivableInputObject`](#6-derivableinputobject) | Implemented |
+| [7. `DerivableObjectType`](#7-derivableobjecttype) | Implemented |
+| [8. Rails Plugin](#8-rails-plugin) | Implemented |
+| [9. ActiveRecord Adapter](#9-activerecord-adapter) | Implemented |
 | [10. Testing Requirements](#10-testing-requirements) | Specified |
 | [11. Open Questions (Deferred to Implementation)](#11-open-questions-deferred-to-implementation) | N/A |
 | [12. Development Environment (Nix)](#12-development-environment-nix) | Implemented |
@@ -387,6 +387,13 @@ end
   inline. They appear in introspection like any other argument.
 - Inline `argument` declarations may coexist with `derive_from`. If an inline `argument` names
   a field also present in the derivation, `ConfigurationError` is raised at resolution time.
+- If the `derive_from` source is itself Derivable (another `DerivableInputObject` or
+  `DerivableObjectType` class with a pending derivation), its own derivation is resolved first,
+  recursively, before this class's arguments are derived from it. Resolution is therefore order
+  -independent: it does not matter which class happens to be included, declared, or resolved
+  first. A cycle anywhere in the `derive_from` graph (including one that crosses both mixins)
+  raises `CyclicDependencyError` with the full cycle path, instead of silently resolving against
+  a partially-resolved or empty source.
 
 ### 6.3 Resolution Trigger
 
@@ -395,6 +402,19 @@ and resolves any pending derivations. Callers:
 - The Rails plugin calls this during `ArgumentSchema` initialisation (see §8.2).
 - Outside Rails, the schema author calls it explicitly, typically in a schema initialiser or
   test helper.
+
+**Rails dev-environment note:** in a Rails app with class reloading enabled (dev/test --
+`config.cache_classes = false` / `config.reloading = true`), do NOT call `resolve_all!` (or
+anything else that populates state from `DerivableInputObject`-including classes) from a
+one-shot initializer. Initializers run once at boot, before any reload cycle, so a class
+redefined by a later reload would never have its derivation re-resolved. Instead wire it into
+`Rails.application.reloader.to_prepare { GraphQL::Derivation::DerivableInputObject.resolve_all! }`
+-- `to_prepare` blocks re-run after every reload AND once at boot, so this stays correct across
+the whole dev/test session. In production, where nothing reloads, a one-shot initializer-style
+call remains fine. See §8.2/§8.1 for the accompanying reload-safety utility
+(`GraphQL::Derivation::Rails.reset_for_reload!`) that should run on the unload side of the same
+reload cycle, and §8.1's `eager_load_argument_sources!` for the separate CI-time validation
+story this does not replace.
 
 ---
 
@@ -439,11 +459,20 @@ end
 - Resolved fields are registered on the ObjectType class via `field` as if declared inline.
 - Inline `field` declarations may coexist with `derive_from`. If an inline `field` names a
   field also produced by the derivation, `ConfigurationError` is raised at resolution time.
+- Same recursive-resolution and cycle-detection guarantee as §6.2: if the `derive_from` source is
+  itself Derivable, its own pending derivation resolves first, resolution order does not matter,
+  and any cycle (including one crossing both `DerivableInputObject` and `DerivableObjectType`)
+  raises `CyclicDependencyError` with the full cycle path.
 
 ### 7.3 Resolution Trigger
 
 `GraphQL::Derivation::DerivableObjectType.resolve_all!` — same pattern as §6.3. Called during schema
 load or explicitly by the schema author.
+
+**Rails dev-environment note:** same guidance as §6.3 -- in dev/test with class reloading
+enabled, drive this from `Rails.application.reloader.to_prepare { ... }`, not a one-shot
+initializer, so re-resolution happens after every reload as well as at boot. In production
+(no reloading), a one-shot initializer-style call is fine.
 
 ---
 
@@ -514,6 +543,12 @@ depth-first stack algorithm. Raises `CyclicDependencyError` at the first cycle d
 Must be called in CI (e.g. in a dedicated spec) to guarantee cycle errors are caught before
 merge.
 
+**This CI role is separate from, and not replaced by, Rails dev-environment reload safety**
+(see §8.2's `reset_for_reload!`): `eager_load_argument_sources!` is a validation entry point you
+run deliberately, in CI, to catch `ConfigurationError`/`CyclicDependencyError` before merge --
+it is not part of normal request-serving or reload behaviour, and reload-safety fixes do not
+change when or how it should be invoked.
+
 #### Collision rule
 
 If a standalone `argument` declaration names a field already produced by `arguments_from` on
@@ -544,6 +579,37 @@ Responsibilities:
   making them introspectable for TypeScript codegen without polluting the application schema.
 
 `ArgumentSchema.for(namespace)` returns or creates the schema for that namespace.
+
+#### Rails dev-environment reload safety
+
+`ArgumentSchema` is cached for the process lifetime, and `ControllerConcern#build_input_object`
+generates a fresh anonymous InputObject class (with a stable, reload-independent `graphql_name`)
+every time the controller class body re-executes. Under Rails class reloading (dev/test),
+`register_input_object` therefore de-duplicates by `graphql_name`, not object identity: a
+reload-driven re-registration REPLACES the previously-registered InputObject for that name in
+place, rather than accumulating a second type with the same name (which would otherwise raise
+`GraphQL::Schema::DuplicateNamesError` on the next `to_definition`/introspection/validation
+call). Registering the exact same class object twice remains a safe no-op, as before.
+
+This still leaves other reload-time state (see Finding 1 below) reachable longer than it needs
+to be, so a companion reset utility is provided:
+
+**`GraphQL::Derivation::Rails.reset_for_reload!`**
+Clears `DerivableInputObject.included_classes`, `DerivableObjectType.included_classes`, all
+cached per-namespace `ArgumentSchema`s (`ArgumentSchema.reset!`), and (if the ActiveRecord
+adapter is loaded) `ActiveRecordMapper.enum_cache`. Not auto-wired into anything -- call it
+explicitly, in a Rails app with class reloading enabled, from:
+
+```ruby
+Rails.application.reloader.before_class_unload do
+  GraphQL::Derivation::Rails.reset_for_reload!
+end
+```
+
+`before_class_unload` runs immediately before Zeitwerk unloads the old autoloaded constants,
+so this clears the gem's registries before the classes they reference become stale, and pairs
+with the `to_prepare`-driven re-resolution described in §6.3/§7.3 to give a clean
+unload-then-rebuild cycle on every reload. In production (no reloading), this never needs to run.
 
 ---
 
@@ -589,6 +655,16 @@ in `Model.defined_enums` (Rails enum):
 
 If the enum values cannot be determined at class load time, `UnsupportedColumnTypeError` is
 raised.
+
+**Rails dev-environment reload safety:** the memoization cache is keyed by `[model.name,
+column_name]` (a String key), not by the `model` class object itself, and additionally records
+which `model` class object produced each cached enum. Under Rails class reloading, a reloaded AR
+model is a new class object with the same `.name`; a plain identity-keyed or naively
+string-keyed-with-`||=` cache would either leak an unreachable stale entry per reload or keep
+serving an enum built from the old, pre-reload model class. Instead, a cache hit is only reused
+when the cached entry's model is `equal?` to the current `model`; otherwise the slot is rebuilt
+and replaced. `GraphQL::Derivation::Rails.reset_for_reload!` (see §8.2) also clears this cache
+entirely as a coarser reset, for use alongside `before_class_unload`.
 
 ### 9.3 Null Handling
 

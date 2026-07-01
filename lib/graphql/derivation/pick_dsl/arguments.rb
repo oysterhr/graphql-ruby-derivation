@@ -14,7 +14,12 @@ module GraphQL
       # `{name => [required_boolean, overrides]}` pairs, matching the shape
       # consumed by ArgumentDerivation's resolution algorithm (SPEC.md §4.4).
       class PickArguments < Base
-        def initialize(candidate_names)
+        # SPEC.md §3.2's "Valid override opts" for PickArguments.
+        ALLOWED_OVERRIDE_OPTS = %i[
+          description default_value prepare validates as deprecation_reason input_type
+        ].freeze
+
+        def initialize(candidate_names, source_name: nil)
           super
           @required_names = Set.new
           @optional_names = Set.new
@@ -36,8 +41,12 @@ module GraphQL
           duplicates = @required_names & @optional_names
           return if duplicates.empty?
 
+          names = duplicates.to_a.sort.map(&:inspect).join(', ')
           raise GraphQL::Derivation::ConfigurationError,
-            "Fields passed to both required and optional: #{duplicates.to_a.inspect}"
+            "#{names} #{duplicates.size == 1 ? 'was' : 'were'} passed to both " \
+            'pick.required and pick.optional -- a field can only be one or the other. ' \
+            'Remove it from whichever call does not match the argument\'s intended ' \
+            'nullability.'
         end
 
         def selections
@@ -64,6 +73,14 @@ module GraphQL
 
         def selected_names
           @required_names | @optional_names
+        end
+
+        def selection_method_hint
+          'required/optional'
+        end
+
+        def allowed_override_opts
+          ALLOWED_OVERRIDE_OPTS
         end
       end
     end

@@ -15,7 +15,12 @@ module GraphQL
       # matching the shape consumed by FieldDerivation's resolution algorithm
       # (SPEC.md §5.4).
       class PickFields < Base
-        def initialize(candidate_names)
+        # SPEC.md §3.3's "Valid override opts" for PickFields.
+        ALLOWED_OVERRIDE_OPTS = %i[
+          description deprecation_reason null method resolver name camelize
+        ].freeze
+
+        def initialize(candidate_names, source_name: nil)
           super
           @selected_names = Set.new
         end
@@ -42,6 +47,14 @@ module GraphQL
         end
 
         attr_reader :selected_names
+
+        def selection_method_hint
+          'fields'
+        end
+
+        def allowed_override_opts
+          ALLOWED_OVERRIDE_OPTS
+        end
       end
     end
   end

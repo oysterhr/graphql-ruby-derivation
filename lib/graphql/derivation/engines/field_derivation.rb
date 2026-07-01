@@ -20,7 +20,7 @@ module GraphQL
       def resolve(source, pick_block)
         candidates = enumerate_candidates(source)
 
-        pick = PickDsl::PickFields.new(candidates.keys)
+        pick = PickDsl::PickFields.new(candidates.keys, source_name: source_name(source))
         pick_block.call(pick)
         pick.validate!
 
@@ -82,6 +82,16 @@ module GraphQL
         raise ArgumentError,
           "Unsupported FieldDerivation source: #{source.inspect}. " \
           'Expected an ObjectType class (`< GraphQL::Schema::Object`).'
+      end
+
+      # A human-readable identifier for +source+, used only for error
+      # messages raised by the Pick DSL (e.g. "unknown field" errors). Named
+      # classes use their name; anonymous classes (common in specs, e.g.
+      # `Class.new(GraphQL::Schema::Object) { ... }`) fall back to their
+      # graphql_name (if the source responds to it) or `#inspect`, since
+      # `Class#name` is nil for them.
+      def source_name(source)
+        source.name || (source.respond_to?(:graphql_name) ? source.graphql_name : nil) || source.inspect
       end
 
       # SPEC.md §5.4's `check_resolver!` step. Raises `UnresolvableFieldError`
@@ -151,6 +161,7 @@ module GraphQL
         :active_record_candidates,
         :raise_active_record_adapter_not_loaded_error,
         :raise_unsupported_source_error,
+        :source_name,
         :check_resolver!,
         :build_field,
         :attach_resolver!,

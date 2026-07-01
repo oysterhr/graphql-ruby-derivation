@@ -47,6 +47,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   underlying type would otherwise resolve to `Int`. `activerecord` (`~> 7.0`) is declared as an
   optional development dependency, consumed only through this require path.
 
+### Changed
+
+- `pick.override` now validates its keyword options eagerly, against an explicit per-subclass
+  allowlist (SPEC §3.2/§3.3's documented "Valid override opts"), instead of accepting anything and
+  letting a typo surface later (or never) at resolution time. An unknown option now raises
+  `ConfigurationError` immediately, at the `pick.override` call site, with a "did you mean" typo
+  suggestion where one is found.
+- Improved several `ConfigurationError`/message-quality issues flagged in review (addressing
+  PR #7, #11, #13 review comments): unknown-field errors now name the derivation source and list
+  its available names (sorted); the empty-selection and not-yet-selected `override` errors now say
+  what to call next; the `required`/`optional` duplicate-field error names the field and both
+  methods involved; and the `derive_from` "at most once" and inline-declaration-collision errors on
+  `DerivableInputObject`/`DerivableObjectType` are more explicit about what happened and how to fix
+  it. No behavior change to the "at most once" `derive_from` restriction itself (SPEC §6.2/§7.2) --
+  only its message text.
+
 ### Fixed
 
 - `DerivableInputObject`-derived arguments are now built with their owning InputObject class

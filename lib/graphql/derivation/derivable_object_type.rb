@@ -31,6 +31,15 @@ module GraphQL
         def resolve_all!
           included_classes.each(&:resolve_derivation!)
         end
+
+        # Reload-safety seam (not part of the ordinary runtime API): forgets
+        # every class registered via the `included` hook. See
+        # `DerivableInputObject.clear!` for the full rationale (identical
+        # leak shape, mirrored here for `DerivableObjectType`). Called from
+        # `GraphQL::Derivation::Rails.reset_for_reload!`.
+        def clear!
+          @included_classes = []
+        end
       end
 
       # Class-level API mixed into `GraphQL::Schema::Object` subclasses.

@@ -154,17 +154,34 @@ RSpec.describe 'derive_from resolution ordering + cycle detection' do
     end
   end
 
+  describe 'cross-mixin cycle (DerivableObjectType <-> DerivableInputObject)' do
+    it 'raises CyclicDependencyError before ever reaching FieldDerivation\'s source-type check' do
+      # `DerivableObjectType#derive_from` does no source-type validation of
+      # its own (SPEC.md §3.1: the source is stored unevaluated and only
+      # checked once resolution runs `FieldDerivation.resolve`, which would
+      # reject an InputObject source -- the Appendix's "InputObject args ->
+      # ObjectType fields" direction is forbidden). But the guard's recursive
+      # source-resolution step runs BEFORE that type check, for any source
+      # that responds to `resolve_derivation!` regardless of whether it's
+      # ultimately a valid source -- so a cross-mixin cycle is caught here
+      # first, and `FieldDerivation`'s `ArgumentError` is never reached.
+      object_type = build_object_type_class('CrossMixinCycleObjectType')
+      input_object = build_input_object_class('CrossMixinCycleInputObject')
+      object_type.derive_from(input_object) { |pick| pick.fields(:title) }
+      input_object.derive_from(object_type) { |pick| pick.required(:title) }
+
+      expect { object_type.resolve_derivation! }.to raise_error(
+        GraphQL::Derivation::CyclicDependencyError,
+        /CrossMixinCycleObjectType.*→.*CrossMixinCycleInputObject.*→.*CrossMixinCycleObjectType/,
+      )
+    end
+  end
+
   describe 'cross-mixin ordering (ObjectType source that is itself a pending DerivableObjectType)' do
-    # Per the Appendix's supported directions, a genuine cross-mixin CYCLE is
-    # not constructible: "InputObject args -> ObjectType fields" is forbidden
-    # (raises ArgumentError at declaration time in FieldDerivation), so an
-    # ObjectType can never derive_from an InputObject in the first place --
-    # there is no way to route a path back from a DerivableInputObject to a
-    # DerivableObjectType that could close a cycle. What IS reachable is
-    # problem #2's cross-mixin manifestation: a DerivableInputObject deriving
-    # from an ObjectType source that is itself a pending DerivableObjectType.
-    # This proves that ordering-independence holds across the mixin boundary,
-    # even though it isn't cyclic.
+    # This context isolates the NON-cyclic cross-mixin
+    # case: a DerivableInputObject deriving from an ObjectType source that is
+    # itself a pending DerivableObjectType. It proves ordering-independence
+    # holds across the mixin boundary even when there's no cycle to catch.
     def build_pending_object_type(name)
       object_type = build_object_type_class(name)
       object_type.derive_from(FixtureSchema::ExpenseType) { |pick| pick.fields(:title, :amount_cents) }

@@ -9,6 +9,17 @@ RSpec.describe GraphQL::Derivation::Rails::Adapters::ActiveRecordMapper do
     candidates.fetch(name).type
   end
 
+  def reloadable_model_class
+    columns = [FixtureSchema::Column.new('category', :integer, false)]
+    enums = {'category' => {'food' => 0, 'travel' => 1, 'paid_time_off' => 2}}
+
+    Class.new do
+      define_singleton_method(:columns) { columns }
+      define_singleton_method(:defined_enums) { enums }
+      define_singleton_method(:name) { 'ReloadableExpense' }
+    end
+  end
+
   describe '.candidates' do
     describe 'SPEC.md §9.1 column type mapping' do
       it 'maps :string to String' do
@@ -102,6 +113,59 @@ RSpec.describe GraphQL::Derivation::Rails::Adapters::ActiveRecordMapper do
         expect { described_class.candidates(model).fetch(:status).type }.to raise_error(
           GraphQL::Derivation::UnsupportedColumnTypeError,
         )
+      end
+    end
+
+    describe 'reload safety (enum_cache keyed by model.name, not the model class object)' do
+      after { described_class.enum_cache.clear }
+
+      it 'produces a fresh enum for a second, distinct model class object sharing the same .name, without raising' do
+        first_model = reloadable_model_class
+        second_model = reloadable_model_class
+
+        described_class.candidates(first_model).fetch(:category).type
+
+        expect { described_class.candidates(second_model).fetch(:category).type }.not_to raise_error
+      end
+
+      it 'keeps the same graphql_name across a reload' do
+        first_model = reloadable_model_class
+        second_model = reloadable_model_class
+
+        first_enum = described_class.candidates(first_model).fetch(:category).type
+        second_enum = described_class.candidates(second_model).fetch(:category).type
+
+        expect(second_enum.graphql_name).to eq(first_enum.graphql_name)
+      end
+
+      it 'does not keep serving the stale (pre-reload) enum for the reloaded model' do
+        first_model = reloadable_model_class
+        second_model = reloadable_model_class
+
+        first_enum = described_class.candidates(first_model).fetch(:category).type
+        second_enum = described_class.candidates(second_model).fetch(:category).type
+
+        expect(second_enum).not_to equal(first_enum)
+      end
+
+      it 'does not retroactively hold two cache entries for the same logical (model-name, column) pair' do
+        first_model = reloadable_model_class
+        second_model = reloadable_model_class
+
+        described_class.candidates(first_model).fetch(:category).type
+        described_class.candidates(second_model).fetch(:category).type
+
+        matching_keys = described_class.enum_cache.keys.select { |key| key == %w[ReloadableExpense category] }
+        expect(matching_keys.size).to eq(1)
+      end
+
+      it 'still memoizes across calls for the same (unreloaded) model class object' do
+        model = reloadable_model_class
+
+        first = described_class.candidates(model).fetch(:category).type
+        second = described_class.candidates(model).fetch(:category).type
+
+        expect(first).to equal(second)
       end
     end
 

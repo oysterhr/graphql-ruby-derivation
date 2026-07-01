@@ -39,7 +39,7 @@ module GraphQL
       def resolve(source, pick_block, context: nil)
         candidates = enumerate_candidates(source, context)
 
-        pick = PickDsl::PickArguments.new(candidates.keys)
+        pick = PickDsl::PickArguments.new(candidates.keys, source_name: source_name(source))
         pick_block.call(pick)
         pick.validate!
 
@@ -69,6 +69,18 @@ module GraphQL
         raise ArgumentError,
           "Unsupported ArgumentDerivation source: #{source.inspect}. " \
           'Expected an ObjectType class, an InputObject class, or a Symbol naming a sibling action.'
+      end
+
+      # A human-readable identifier for +source+, used only for error
+      # messages raised by the Pick DSL (e.g. "unknown field" errors). Named
+      # classes use their name; anonymous classes (common in specs, e.g.
+      # `Class.new(GraphQL::Schema::Object) { ... }`) fall back to their
+      # graphql_name (if the source responds to it) or `#inspect`, since
+      # `Class#name` is nil for them.
+      def source_name(source)
+        return source.inspect if source.is_a?(Symbol)
+
+        source.name || (source.respond_to?(:graphql_name) ? source.graphql_name : nil) || source.inspect
       end
 
       def object_type_source?(source)
@@ -139,6 +151,7 @@ module GraphQL
       private_class_method :object_type_source?,
         :input_object_source?,
         :raise_unsupported_source_error,
+        :source_name,
         :sibling_candidates,
         :build_argument,
         :resolve_type

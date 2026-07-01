@@ -18,10 +18,12 @@ module GraphQL
         #
         # One mapper instance is built per `(model, pick_block)` resolution
         # by `FieldDerivation`; the *enum cache* (§9.2's memoization
-        # requirement) is therefore class-level, keyed by `[model, column
-        # name]`, so the same generated enum class is returned across
-        # separate `FieldDerivation.resolve` calls for the same model/column
-        # -- not just within a single mapper instance.
+        # requirement) is therefore class-level, keyed by `[model.name,
+        # column name]` (see the cache's own comment below for why the name
+        # string, not the model class object, is used as the key), so the
+        # same generated enum class is returned across separate
+        # `FieldDerivation.resolve` calls for the same model/column -- not
+        # just within a single mapper instance.
         #
         # ## Excluded columns (§9.4)
         #
@@ -104,10 +106,30 @@ module GraphQL
             'uuid' => :uuid,
           }.freeze
 
-          # Class-level enum cache (SPEC.md §9.2): `[model, column_name] =>
-          # generated GraphQL::Schema::Enum subclass`. Shared across mapper
-          # instances/resolutions so the same column always yields the same
-          # enum class object.
+          # Class-level enum cache (SPEC.md §9.2): `[model.name, column_name]
+          # => { model:, enum: }`. Shared across mapper instances/resolutions
+          # so the same column always yields the same enum class object.
+          #
+          # Keyed by `model.name` (a String), not the `model` class object
+          # itself. Under Rails class reloading (Zeitwerk), a reloaded AR
+          # model is a NEW class object with the same `.name` -- an
+          # identity-based key (`[model, ...]`) would never hit the old
+          # cache slot after a reload, silently leaking one stale entry per
+          # reload while also generating a fresh enum with the exact same
+          # `graphql_name` (derived from `model.name`, which is stable). If
+          # anything still held a reference to the old enum, that would be
+          # two distinct classes sharing one `graphql_name` -- the same
+          # `DuplicateNamesError` risk as `ArgumentSchema#register_input_object`.
+          #
+          # A plain `||=` on the string key alone would fix the leak but
+          # introduce a subtler bug: after a reload, the string key matches
+          # the STALE slot, so `||=` would keep serving the OLD enum (built
+          # from the old model class) forever, even though `model` is now a
+          # different, current class object. To detect "the key matches but
+          # the model has actually changed identity (a reload happened)", the
+          # cache stores the model class object alongside the enum and
+          # compares it with `equal?` before reusing a hit; a mismatch
+          # rebuilds and replaces the slot in place (see `enum_type` below).
           @enum_cache = {}
 
           class << self
@@ -220,8 +242,20 @@ module GraphQL
             column.type == :enum || model.defined_enums.key?(column.name.to_s)
           end
 
+          # See the `@enum_cache` comment above: the cache slot is only
+          # reused when BOTH the string key matches AND the cached entry's
+          # `model` is the identical class object as the current `model` --
+          # a string-key match with a differing model object means the model
+          # was reloaded, so the slot is rebuilt and replaced rather than
+          # blindly reused.
           def enum_type(column)
-            self.class.enum_cache[[model, column.name.to_s]] ||= build_enum_type(column)
+            cache = self.class.enum_cache
+            key = [model.name, column.name.to_s]
+            cached = cache[key]
+            return cached[:enum] if cached && cached[:model].equal?(model)
+
+            cache[key] = {model: model, enum: build_enum_type(column)}
+            cache[key][:enum]
           end
 
           def build_enum_type(column)

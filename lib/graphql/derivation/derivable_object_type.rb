@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'graphql/derivation/engines/field_derivation'
+require 'graphql/derivation/derivation_resolution_guard'
 
 module GraphQL
   module Derivation
@@ -49,9 +50,44 @@ module GraphQL
 
         # SPEC.md §7.3: resolves this class's pending derivation, if any.
         # Idempotent -- a second call is a no-op once resolution has
-        # happened (or if `derive_from` was never called).
-        def resolve_derivation!
+        # happened (or if `derive_from` was never called). The early-return
+        # check above happens BEFORE the cycle guard is engaged, so
+        # resolving an already-finished dependency never touches the
+        # in-progress stack -- only a derivation that is genuinely being
+        # computed right now participates in cycle detection.
+        #
+        # If `@derivation_source` is itself Derivable (i.e. responds to
+        # `resolve_derivation!` -- another `DerivableObjectType` or
+        # `DerivableInputObject` class), its own derivation is resolved
+        # FIRST, recursively, before `FieldDerivation.resolve` reads its
+        # `.fields`. This makes resolution order-independent: a source
+        # always finishes resolving before its dependent does, regardless of
+        # which class happened to be included/declared first. Both this
+        # recursive call and this class's own resolution are wrapped in
+        # `DerivationResolutionGuard.guard`, which shares its in-progress
+        # stack with `DerivableInputObject` -- so a cycle is caught even if
+        # it crosses both mixins.
+        #
+        # @param context [#resolve_sibling_arguments, nil] `FieldDerivation`
+        #   itself never consults `context:` -- SPEC.md §5.1 has no Symbol
+        #   source for ObjectTypes -- but a Derivable *source* reached via
+        #   `derive_from` might itself be a `DerivableInputObject` with a
+        #   pending Symbol-sourced derivation (unusual, but not forbidden by
+        #   the Appendix's direction rules), so `context:` is accepted here
+        #   purely to forward to that recursive call. Defaults to nil, so
+        #   ordinary (non-Rails) callers are unaffected.
+        def resolve_derivation!(context: nil)
           return unless defined?(@derivation_pick_block) && @derivation_pick_block
+
+          GraphQL::Derivation::DerivationResolutionGuard.guard(self) { resolve_pending_derivation!(context) }
+        end
+
+        private
+
+        # The guarded body of `resolve_derivation!`, split out so the public
+        # method itself stays a short guard-then-delegate wrapper.
+        def resolve_pending_derivation!(context)
+          resolve_source_derivation!(context)
 
           pre_existing_names = fields.keys
 
@@ -65,7 +101,18 @@ module GraphQL
           @derivation_pick_block = nil
         end
 
-        private
+        # Ensures `@derivation_source`'s own derivation (if it is Derivable)
+        # has resolved before this class reads its `.fields`. Runs BEFORE
+        # `FieldDerivation.resolve` is called, from inside the cycle guard,
+        # so a source that is mid-resolution (a true cycle) raises
+        # `CyclicDependencyError` from `DerivationResolutionGuard.guard`
+        # instead of this class silently reading the source's
+        # not-yet-registered (i.e. empty) fields.
+        def resolve_source_derivation!(context)
+          return unless @derivation_source.respond_to?(:resolve_derivation!)
+
+          @derivation_source.resolve_derivation!(context: context)
+        end
 
         # PR #13 review (khamusa) questioned whether this restriction should
         # be relaxed, mirroring the same question raised on

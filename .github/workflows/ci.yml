@@ -16,7 +16,7 @@ jobs:
         # not just the current release.
         bundle_gemfile:
           - Gemfile
-          - gemfiles/graphql_2.3.gemfile
+          - gemfiles/graphql_2.1.gemfile
     env:
       BUNDLE_GEMFILE: ${{ matrix.bundle_gemfile }}
     steps:

@@ -19,7 +19,7 @@ AllCops:
     merge:
       - Exclude
   # RuboCop's built-in default excludes only cover a top-level `vendor/**/*`;
-  # `gemfiles/graphql_2.3.gemfile` (SPEC.md §12.6) installs its own bundle
+  # `gemfiles/graphql_2.1.gemfile` (SPEC.md §12.6) installs its own bundle
   # under `gemfiles/vendor/`, which needs its own exclude.
   Exclude:
     - 'gemfiles/vendor/**/*'
@@ -257,6 +257,14 @@ Metrics/BlockNesting:
 Metrics/BlockLength:
   Enabled: true
   Max: 192
+  Exclude:
+    # ControllerConcern's `class_methods do ... end` (ActiveSupport::Concern's
+    # DSL) is one long block by construction -- it's where every class-level
+    # DSL method (`argument`, `arguments_from`, `resource_arguments`, etc.,
+    # SPEC.md §8.1) lives. Splitting it up would mean moving methods out of
+    # the `class_methods` block into a separate module, which would obscure
+    # (rather than clarify) that they're all part of one DSL.
+    - 'lib/graphql/derivation/rails/controller_concern.rb'
 
 Metrics/ClassLength:
   Enabled: true

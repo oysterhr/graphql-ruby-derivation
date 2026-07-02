@@ -58,6 +58,55 @@ RSpec.describe GraphQL::Derivation::Rails::ArgumentSchema do
     end
   end
 
+  # SPEC.md §8.2 "Introspection design": a top-level InputObject whose own
+  # argument is ANOTHER InputObject (the `resource_arguments` case, SPEC.md
+  # §8.1) must print correctly -- both the type itself and every one of its
+  # scalar arguments. graphql-ruby's own `extra_types` mechanism cannot make
+  # this reachable at all (InputObject can't be a field return type, so the
+  # dummy-field trick `extra_types` relies on internally skips InputObject
+  # entries entirely); only registering the *outer* InputObject and letting
+  # normal root-based reachability do the rest (this schema's actual design)
+  # makes it work.
+  describe 'reachability of a nested InputObject argument (multi-argument, multi-type)' do
+    let(:nested_input_object) do
+      Class.new(GraphQL::Schema::InputObject) do
+        graphql_name 'WidgetNestedInput'
+        argument :title, String, required: true
+        argument :amount_cents, GraphQL::Types::Int, required: true
+      end
+    end
+
+    let(:outer_input_object) do
+      nested = nested_input_object
+      Class.new(GraphQL::Schema::InputObject) do
+        graphql_name 'WidgetOuterInput'
+        argument :widget, nested, required: true
+      end
+    end
+
+    it 'prints the outer InputObject with its nested-InputObject-typed argument' do
+      schema = described_class.for(:widgets)
+      schema.register_input_object(outer_input_object)
+
+      expect(schema.to_definition).to include('widget: WidgetNestedInput!')
+    end
+
+    it 'prints the nested InputObject with every one of its own arguments' do
+      schema = described_class.for(:widgets)
+      schema.register_input_object(outer_input_object)
+
+      sdl = schema.to_definition
+      expect(sdl).to include('title: String!').and include('amountCents: Int!')
+    end
+
+    it 'does not require the nested InputObject to be separately registered' do
+      schema = described_class.for(:widgets)
+      schema.register_input_object(outer_input_object)
+
+      expect(schema.registered_input_objects).to contain_exactly(outer_input_object)
+    end
+  end
+
   describe 'reload safety (dedup by graphql_name, not object identity)' do
     def build_input_object(name)
       Class.new(GraphQL::Schema::InputObject) do
@@ -209,6 +258,13 @@ RSpec.describe GraphQL::Derivation::Rails::ArgumentSchema do
     end
 
     it 'exposes a visibility profile via #types, backed by the same warden' do
+      # `#types` is only ever called by graphql-ruby versions whose own
+      # `coerce_arguments` calls it (>= 2.4 -- see the class docs); on older
+      # versions `warden.visibility_profile` genuinely does not exist, and
+      # `#types` is correctly never reached in practice.
+      skip 'warden has no visibility_profile on this graphql-ruby version' \
+        unless context.warden.respond_to?(:visibility_profile)
+
       expect(context.types.arguments(GraphQL::Schema::InputObject)).to eq([])
     end
 

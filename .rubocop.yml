@@ -11,6 +11,19 @@ AllCops:
   SuggestExtensions: false
   NewCops: enable
   TargetRubyVersion: 3.1
+  # `Exclude` under `AllCops` overrides (rather than merges with) RuboCop's
+  # built-in default excludes unless told to merge -- without this,
+  # specifying our own `Exclude` below would un-exclude the top-level
+  # `vendor/**/*` that RuboCop's defaults already cover.
+  inherit_mode:
+    merge:
+      - Exclude
+  # RuboCop's built-in default excludes only cover a top-level `vendor/**/*`;
+  # `gemfiles/graphql_2.3.gemfile` (SPEC.md §12.6) installs its own bundle
+  # under `gemfiles/vendor/`, which needs its own exclude.
+  Exclude:
+    - 'gemfiles/vendor/**/*'
+    - 'gemfiles/.bundle/**/*'
 
 ### Cops ###
 
@@ -337,6 +350,16 @@ RSpec/BeEq:
 
 RSpec/BeNil:
   Enabled: true
+
+# argument_schema_spec.rb's top-level `before`/`after` reset hooks need the
+# explicit `ArgumentSchema` constant: a nested `describe
+# ArgumentSchema::NullQueryContext` block further down changes what
+# `described_class` resolves to, but the reset must always target
+# `ArgumentSchema` regardless of nesting.
+RSpec/DescribedClass:
+  Enabled: true
+  Exclude:
+    - 'spec/graphql/derivation/rails/argument_schema_spec.rb'
 
 RSpec/DescribedClassModuleWrapping:
   Enabled: true

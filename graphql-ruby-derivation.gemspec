@@ -28,7 +28,11 @@ Gem::Specification.new do |spec|
   end
   spec.require_paths = ['lib']
 
-  spec.add_dependency 'graphql', '~> 2.0'
+  # SPEC.md §1.2: 2.3 is graphql-ruby's first release with `extra_types`,
+  # which ArgumentSchema needs (see §8.2 "graphql-ruby version compatibility")
+  # -- not just a nominal constraint. CI runs the suite against both ends of
+  # this range (SPEC.md §12.6).
+  spec.add_dependency 'graphql', '>= 2.3', '< 3.0'
 
   # SPEC.md §1.2: the Rails plugin (`graphql/derivation/rails`) depends on
   # activesupport + actionpack, but they are *optional* -- consumed via require

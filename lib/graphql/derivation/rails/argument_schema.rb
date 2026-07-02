@@ -24,17 +24,89 @@ module GraphQL
       # from any root, are filtered out of the visibility-profile-backed
       # `Schema.types`. The supported registration channel is `extra_types`,
       # which is what `Schema#to_definition` (the SDL the codegen plugin
-      # consumes) walks. So `registered_input_objects` and `to_definition` are
-      # the introspection surface here, not `Schema.types`.
+      # consumes) walks -- unlike `orphan_types`, `extra_types` is appended
+      # directly to the printed type list rather than being routed through
+      # visibility filtering (see "graphql-ruby version compatibility"
+      # below for why that distinction matters). So `registered_input_objects`
+      # and `to_definition` are the introspection surface here, not
+      # `Schema.types`.
       class ArgumentSchema < GraphQL::Schema
+        # SPEC.md §8.2 "graphql-ruby version compatibility": `GraphQL::Query::
+        # NullContext` cannot be used here on ANY graphql-ruby version this
+        # gem supports (>= 2.3, SPEC.md §1.2) -- through at least 2.5.x it
+        # remains a true `Singleton` (private `.new`) fixed to its own
+        # internal `NullSchema`, so it can never be bound to *this*
+        # `ArgumentSchema`. `NullQueryContext` is this gem's own permanent
+        # replacement, not a version-conditional shim: built from the same
+        # primitives graphql-ruby's own `NullContext` composes internally
+        # across that whole range (`GraphQL::Schema::Warden::NullWarden`,
+        # `GraphQL::Dataloader::NullDataloader`), bound to the schema that's
+        # actually passed in.
+        class NullQueryContext
+          # Duck-typed stand-in for `GraphQL::Query`. `InputObject#coerce_input`
+          # calls `context.query.after_lazy(value) { ... }` on every
+          # graphql-ruby version in range, always with a value already
+          # resolved synchronously by `NullWarden`/`NullDataloader` below --
+          # there is never anything to actually wait on. This mirrors
+          # graphql-ruby's own (private) `NullContext::NullQuery`, which
+          # behaves identically -- no genuine lazy resolution -- on every
+          # version in range.
+          class NullQuery
+            def after_lazy(value)
+              yield(value)
+            end
+          end
+
+          attr_reader :schema, :query, :warden, :dataloader
+
+          def initialize(schema:)
+            @schema = schema
+            @query = NullQuery.new
+            @dataloader = GraphQL::Dataloader::NullDataloader.new
+            @warden = GraphQL::Schema::Warden::NullWarden.new(context: self, schema: schema)
+          end
+
+          # `InputObject#coerce_arguments` reads argument visibility via
+          # `context.types.arguments(...)` on every graphql-ruby version this
+          # gem supports (>= 2.3 -- confirmed against real installs of 2.3.0
+          # through the current release, SPEC.md §12.6). Delegates to
+          # `warden.visibility_profile`, which exists on all of them too.
+          def types
+            warden.visibility_profile
+          end
+
+          # `GraphQL::Query::Context`'s scoped-storage interface (`ctx[:foo]`),
+          # matching `NullContext`'s own delegate-to-an-empty-hash behaviour on
+          # every graphql-ruby version in range.
+          def [](_key)
+            nil
+          end
+
+          def fetch(_key, default = nil)
+            default
+          end
+
+          def dig(*_keys)
+            nil
+          end
+
+          def key?(_key)
+            false
+          end
+
+          def to_h
+            {}
+          end
+        end
+
         # Class-level behaviour mixed into each per-namespace ArgumentSchema
         # subclass. Extracted into a module so `build_namespace_schema` stays a
         # thin factory.
         module NamespaceSchema
           attr_reader :argument_namespace
 
-          # Registers an anonymous InputObject as an orphan/extra type so it
-          # shows up in this schema's SDL for codegen.
+          # Registers an anonymous InputObject as an extra type so it shows up
+          # in this schema's SDL for codegen.
           #
           # De-duplicates by `graphql_name`, not object identity. Rails class
           # reloading (Zeitwerk) rebuilds `ControllerConcern`'s anonymous
@@ -56,15 +128,15 @@ module GraphQL
           # exactly one entry per `graphql_name`, always the most recently
           # registered class.
           #
-          # `GraphQL::Schema.extra_types` (graphql-ruby core) only ever
-          # CONCATS onto its own internal `@own_extra_types` list -- it has
-          # no replace semantics of its own. So re-registering under an
-          # already-seen `graphql_name` would still leave graphql-ruby's own
-          # internal list holding both the old and new class objects (and
-          # `to_definition` would print the type twice) even though our own
-          # `registered_input_objects` is correctly deduped. `@own_extra_types`
-          # is reset here before re-adding the deduped list, so graphql-ruby's
-          # internal state always mirrors `registered_input_objects` exactly.
+          # `extra_types` (graphql-ruby core) only ever CONCATS onto its own
+          # internal `@own_extra_types` list -- it has no replace semantics of
+          # its own. So re-registering under an already-seen `graphql_name`
+          # would still leave graphql-ruby's own internal list holding both
+          # the old and new class objects (and `to_definition` would print
+          # the type twice) even though our own `registered_input_objects` is
+          # correctly deduped. `@own_extra_types` is reset here before
+          # re-adding the deduped list, so graphql-ruby's internal state
+          # always mirrors `registered_input_objects` exactly.
           def register_input_object(input_object_class)
             registered_input_objects.reject! { |existing| existing.graphql_name == input_object_class.graphql_name }
             registered_input_objects << input_object_class
@@ -76,11 +148,12 @@ module GraphQL
             @registered_input_objects ||= []
           end
 
-          # The query context used to coerce request input. A NullContext bound
-          # to this schema gives a NullWarden (all types visible), which is
-          # exactly SPEC.md §8.2's requirement.
+          # The query context used to coerce request input. A `NullWarden`
+          # -backed context bound to this schema gives all-types-visible
+          # semantics, exactly SPEC.md §8.2's requirement, on every
+          # graphql-ruby version this gem supports (see `NullQueryContext`).
           def coercion_context
-            GraphQL::Query::NullContext.new(schema: self)
+            NullQueryContext.new(schema: self)
           end
         end
 

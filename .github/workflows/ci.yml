@@ -8,6 +8,40 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # SPEC.md §12.6 "graphql-ruby version matrix": run the real suite
+        # against both ends of the supported graphql-ruby range (§1.2/§8.2),
+        # not just the current release.
+        bundle_gemfile:
+          - Gemfile
+          - gemfiles/graphql_2.3.gemfile
+    env:
+      BUNDLE_GEMFILE: ${{ matrix.bundle_gemfile }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: cachix/install-nix-action@v27
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - uses: actions/cache@v4
+        with:
+          path: ${{ matrix.bundle_gemfile == 'Gemfile' && 'vendor/bundle' || 'gemfiles/vendor/bundle' }}
+          key: ${{ runner.os }}-bundle-${{ hashFiles(matrix.bundle_gemfile) }}
+          restore-keys: |
+            ${{ runner.os }}-bundle-
+
+      - name: bundle install
+        run: nix develop --command bash -c 'bundle install --jobs 4 --retry 3'
+
+      - name: rspec
+        run: nix develop --command bash -c 'bundle exec rspec'
+
+  lint:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -25,9 +59,6 @@ jobs:
 
       - name: bundle install
         run: nix develop --command bash -c 'bundle install --jobs 4 --retry 3'
-
-      - name: rspec
-        run: nix develop --command bash -c 'bundle exec rspec'
 
       - name: rubocop
         run: nix develop --command bash -c 'bundle exec rubocop'

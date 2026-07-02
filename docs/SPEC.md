@@ -31,6 +31,9 @@ corresponding row(s) in the same PR. See `AGENTS.md`.
 | [12. Development Environment (Nix)](#12-development-environment-nix) | Implemented |
 | [Appendix: Derivation Direction Rules](#appendix-derivation-direction-rules) | N/A |
 
+User-facing docs (`README.md`/`USAGE.md`/`USAGE.CAVEKIT.md`) derive from this spec and are kept
+in sync per the policy in `AGENTS.md` § Decisions on record → Docs derivation.
+
 ---
 
 ## 1. Gem Identity

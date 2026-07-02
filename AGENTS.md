@@ -33,7 +33,15 @@ Implemented / N/A per section). Whenever you start or finish implementing part o
 
 ## Decisions on record
 
-- **Gemspec authors:** `Oyster HR Developers`, email `engineering-paperwork@oysterhr.com`.
+- **Gemspec authors:** `Oyster HR, Inc. Engineers`, email `developers@oysterhr.com` — matches the
+  convention Legal (Jeff May) and Oyster's `tabasco` gem settled on for OSS releases: a
+  departmental name/email with "no chance of being decommissioned," not an individual's.
+- **OSS release process:** every dependency declared in the gemspec is mirrored in `NOTICE`
+  (name + license). Update `NOTICE` in the same PR as any gemspec dependency change — this is
+  the artifact Legal asks for when reviewing a release for license-compatibility (MIT vs. any
+  copyleft dependency). The gem is marked **experimental** (README + gemspec `summary`/
+  `description`) until a stable release is cut; keep that wording in sync with reality rather
+  than removing it prematurely.
 - **CI:** GitHub Actions (`.github/workflows/ci.yml`), runs `bundle exec rspec` and
   `bundle exec rubocop` on push/PR.
 - **Lint:** rubocop + `rubocop-rspec` + `rubocop-performance`. Base ruleset mirrors

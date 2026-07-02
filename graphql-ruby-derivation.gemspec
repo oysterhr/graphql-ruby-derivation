@@ -5,13 +5,14 @@ require_relative 'lib/graphql/derivation/version'
 Gem::Specification.new do |spec|
   spec.name          = 'graphql-ruby-derivation'
   spec.version       = GraphQL::Derivation::VERSION
-  spec.authors       = ['Oyster HR Developers']
-  spec.email         = ['engineering-paperwork@oysterhr.com']
+  spec.authors       = ['Oyster HR, Inc. Engineers']
+  spec.email         = ['developers@oysterhr.com']
 
-  spec.summary       = 'Composable argument and field derivation utilities for graphql-ruby schemas.'
-  spec.description   = 'Derive GraphQL::Schema::Argument and GraphQL::Schema::Field definitions ' \
-                       'from ObjectTypes, InputObjects, and ActiveRecord models, with optional ' \
-                       'Rails integration.'
+  spec.summary       = 'Experimental, composable argument and field derivation utilities for ' \
+                       'graphql-ruby schemas.'
+  spec.description   = 'EXPERIMENTAL. Derive GraphQL::Schema::Argument and GraphQL::Schema::Field ' \
+                       'definitions from ObjectTypes, InputObjects, and ActiveRecord models, with ' \
+                       'optional Rails integration. Use at your own risk.'
   spec.homepage      = 'https://github.com/oysterhr/graphql-ruby-derivation'
   spec.license       = 'MIT'
   spec.required_ruby_version = '>= 3.1'

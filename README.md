@@ -5,6 +5,13 @@ from existing types, instead of hand-writing (and re-writing, and drifting) the 
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
+> **⚠️ Experimental.** This gem is early-stage and not yet battle-tested in production. The API
+> may change without notice before a stable release. Use at your own risk.
+>
+> All code in this repository — implementation, tests, and documentation — was written with
+> agentic coding assistance (AI coding agents operating with human review and direction), not
+> hand-written line-by-line. Review it accordingly before depending on it.
+
 ## Install
 
 ```ruby

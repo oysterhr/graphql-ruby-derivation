@@ -53,6 +53,22 @@ Implemented / N/A per section). Whenever you start or finish implementing part o
   vendor to `vendor/bundle` (set via `bundle config set --local path`), not a shared gem path.
   CI provisions the same flake shell (via a Nix-installer action + `nix develop`) instead of
   `ruby/setup-ruby`, so CI and local dev share one toolchain definition. Full spec: SPEC.md §12.
+- **Docs derivation:** three user-facing docs, each derived from SPEC.md (source of truth,
+  never the reverse):
+  - `README.md` — standard OSS front matter (license, install, dev setup, links out). No
+    feature/API detail beyond a pitch — that lives in USAGE.md.
+  - `USAGE.md` — human getting-started guide: problem statement, runnable examples, Pick DSL
+    cheat-table, error glossary. Public-API-only — mirrors what SPEC.md documents as public,
+    never introduces a fact SPEC.md doesn't already state.
+  - `USAGE.CAVEKIT.md` — agent-oriented, token-minimized reference (method signatures, override
+    allowlists, source-type support matrix, error hierarchy, the reload/cycle-detection
+    footguns). **Mechanically generated from `USAGE.md`** via the `caveman:compress` skill
+    (`/caveman:compress USAGE.md`) — never hand-edited independently, to prevent drift.
+  - Sync rule: any PR that changes public API surface documented in SPEC.md (new/removed method,
+    changed error hierarchy, changed Pick DSL override allowlist, etc.) updates `USAGE.md` in the
+    same PR, then regenerates `USAGE.CAVEKIT.md` from it in the same commit — same discipline as
+    the SPEC.md status table and CHANGELOG.md rules above. Internal-only changes (caching,
+    private helpers) touch neither.
 
 ## Required before calling work done
 

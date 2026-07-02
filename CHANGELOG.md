@@ -8,6 +8,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- `NOTICE` file listing every gemspec dependency and its license (all currently MIT), for Legal's
+  OSS license-compatibility review. Update it in the same PR as any gemspec dependency change.
+- README disclosure: the gem is experimental (use at your own risk) and all code in the
+  repository was written with agentic coding assistance.
+
+### Changed
+
+- Gemspec `authors`/`email` changed from `Oyster HR Developers` / `engineering-paperwork@oysterhr.com`
+  to `Oyster HR, Inc. Engineers` / `developers@oysterhr.com`, matching the convention Legal and
+  the `tabasco` gem settled on for OSS releases (a durable departmental identity, not an
+  individual's).
+- Gemspec `summary`/`description` now note the gem is experimental.
+
 - `GraphQL::Derivation::ArgumentDerivation` now accepts a Mutation class
   (`< GraphQL::Schema::Mutation`, including `GraphQL::Schema::RelayClassicMutation`) as a source,
   in addition to ObjectType/InputObject/Symbol (SPEC §4.1/§4.2). A mutation's arguments are

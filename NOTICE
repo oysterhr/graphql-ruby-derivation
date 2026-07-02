@@ -1,0 +1,19 @@
+graphql-ruby-derivation
+Copyright (c) 2026 Oyster®
+
+This product is licensed under the MIT License (see LICENSE).
+
+This NOTICE lists every dependency declared in graphql-ruby-derivation.gemspec and its license,
+per Oyster's OSS release process. Update this file in the same PR as any change to the
+dependency list in the gemspec.
+
+Runtime dependencies
+---------------------
+graphql (~> 2.0) -- MIT
+
+Development dependencies (consumed only via the optional graphql/derivation/rails and
+graphql/derivation/rails/active_record require paths; never loaded by core)
+---------------------------------------------------------------------------------------
+actionpack (~> 7.0)   -- MIT
+activerecord (~> 7.0) -- MIT
+activesupport (~> 7.0) -- MIT

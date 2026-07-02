@@ -3,15 +3,16 @@
 # SPEC.md §8.2 "graphql-ruby version compatibility" / §12.6 "graphql-ruby version matrix":
 # pins graphql to this gem's verified floor so CI runs the real test suite against a real
 # install of the oldest supported graphql-ruby release, exercising ArgumentSchema's
-# `extra_types`-availability assumption instead of leaving it permanently untested.
+# NullQueryContext/synthetic-query-root design against a version that predates several
+# internal graphql-ruby APIs the current release uses.
 #
-# Run with: BUNDLE_GEMFILE=gemfiles/graphql_2.3.gemfile bundle exec rspec
+# Run with: BUNDLE_GEMFILE=gemfiles/graphql_2.1.gemfile bundle exec rspec
 
 source 'https://rubygems.org'
 
 gemspec path: '..'
 
-gem 'graphql', '~> 2.3.0'
+gem 'graphql', '~> 2.1.0'
 
 group :development, :test do
   gem 'rake'

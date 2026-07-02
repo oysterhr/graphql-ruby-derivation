@@ -125,6 +125,134 @@ RSpec.describe GraphQL::Derivation::Rails::ControllerConcern do
     end
   end
 
+  describe '#arguments with resource_arguments (SPEC.md §8.1)' do
+    context 'with a flat argument mixed with a nested resource scope' do
+      let(:controller) do
+        build_controller do
+          argument :page, GraphQL::Types::Int, required: false
+
+          resource_arguments :expense do
+            arguments_from FixtureSchema::ExpenseType do |pick|
+              pick.required :title, :amount_cents
+            end
+          end
+
+          def create; end
+        end
+      end
+
+      it 'returns a nested Hash for the resource scope and a flat value for the flat argument' do
+        instance = instance_for(
+          controller,
+          action: :create,
+          params: {'page' => 2, 'expense' => {'title' => 'Lunch', 'amountCents' => 1200}},
+        )
+
+        expect(instance.arguments).to eq(page: 2, expense: {title: 'Lunch', amount_cents: 1200})
+      end
+
+      it 'raises ArgumentParsingError when a required field inside the resource scope is missing' do
+        instance = instance_for(
+          controller, action: :create, params: {'expense' => {'title' => 'Lunch'}},
+        )
+
+        expect { instance.arguments }.to raise_error(GraphQL::Derivation::Rails::ArgumentParsingError)
+      end
+
+      it 'raises ArgumentParsingError when the resource key itself is absent (required: true default)' do
+        instance = instance_for(controller, action: :create, params: {'page' => 2})
+
+        expect { instance.arguments }.to raise_error(GraphQL::Derivation::Rails::ArgumentParsingError)
+      end
+    end
+
+    context 'with required: false' do
+      let(:controller) do
+        build_controller do
+          resource_arguments :expense, required: false do
+            argument :title, String, required: true
+          end
+          def create; end
+        end
+      end
+
+      it 'omits the resource key from #arguments when the client sends nothing for it' do
+        instance = instance_for(controller, action: :create, params: {})
+
+        expect(instance.arguments).to eq({})
+      end
+    end
+
+    describe 'the auto-generated resource_params helper' do
+      let(:controller) do
+        build_controller do
+          resource_arguments :expense do
+            argument :title, String, required: true
+          end
+          def create; end
+        end
+      end
+
+      it 'is equivalent to arguments[key]' do
+        instance = instance_for(controller, action: :create, params: {'expense' => {'title' => 'Lunch'}})
+
+        expect(instance.send(:expense_params)).to eq(title: 'Lunch')
+      end
+
+      it 'is private, matching the Rails strong-parameters naming convention' do
+        expect(controller.private_method_defined?(:expense_params)).to be(true)
+      end
+    end
+
+    it 'raises ConfigurationError when nesting a resource_arguments block inside another' do
+      expect do
+        build_controller do
+          resource_arguments :outer do
+            resource_arguments :inner do
+              argument :title, String, required: true
+            end
+          end
+          def create; end
+        end
+      end.to raise_error(GraphQL::Derivation::ConfigurationError, /nested resource_arguments/)
+    end
+
+    it 'raises ConfigurationError when the same resource_arguments key is declared twice for one action' do
+      expect do
+        build_controller do
+          resource_arguments(:expense) { argument :title, String, required: true }
+          resource_arguments(:expense) { argument :description, String, required: false }
+          def create; end
+        end
+      end.to raise_error(GraphQL::Derivation::ConfigurationError, /already declared/)
+    end
+
+    it 'raises ConfigurationError when a resource_arguments key collides with a flat argument' do
+      expect do
+        build_controller do
+          argument :expense, String, required: false
+          resource_arguments(:expense) { argument :title, String, required: true }
+          def create; end
+        end
+      end.to raise_error(GraphQL::Derivation::ConfigurationError, /collides/)
+    end
+
+    it 'makes the nested InputObject and its arguments visible in the ArgumentSchema SDL' do
+      controller = build_controller(namespace: :resource_sdl) do
+        resource_arguments :expense do
+          argument :title, String, required: true
+          argument :amount_cents, GraphQL::Types::Int, required: true
+        end
+        def create; end
+      end
+      controller.eager_load_argument_sources!
+
+      sdl = GraphQL::Derivation::Rails::ArgumentSchema.for(:resource_sdl).to_definition
+
+      expect(sdl).to include('title: String!').and include('amountCents: Int!')
+    end
+  end
+
   describe 'class DSL validation' do
     it 'rejects loads: on an inline argument' do
       expect do

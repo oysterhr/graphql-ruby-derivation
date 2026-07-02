@@ -9,7 +9,7 @@ dependency list in the gemspec.
 
 Runtime dependencies
 ---------------------
-graphql (>= 2.3, < 3.0) -- MIT
+graphql (>= 2.1, < 3.0) -- MIT
 
 Development dependencies (consumed only via the optional graphql/derivation/rails and
 graphql/derivation/rails/active_record require paths; never loaded by core)

@@ -118,6 +118,33 @@ end
 Call `ExpensesController.eager_load_argument_sources!` in a CI spec so cycles/typos in
 `arguments_from` sources fail the build instead of a live request.
 
+By default, arguments are read flat, at the top level of the request body. For a Rails-idiomatic
+nested shape instead — `{ expense: { title: ..., amountCents: ... } }`, matching `form_for`/
+strong-parameters conventions — wrap the relevant declarations in `resource_arguments`:
+
+```ruby
+class ExpensesController < ApplicationController
+  argument :page, GraphQL::Types::Int, required: false   # stays flat: params['page']
+
+  resource_arguments :expense do                          # nested: params['expense']
+    arguments_from CreateExpenseInput do |pick|
+      pick.required :title, :amount_cents
+      pick.optional :description
+    end
+  end
+
+  def create
+    arguments        # => { page: 2, expense: { title: "Lunch", amount_cents: 1200, description: nil } }
+    expense_params    # => { title: "Lunch", amount_cents: 1200, description: nil } -- shorthand for arguments[:expense]
+  end
+end
+```
+
+`resource_arguments` also defines a private `"#{key}_params"` helper (`expense_params` above),
+for the familiar Rails call site. `required:` defaults to `true` (pass `required: false` if the
+whole nested key is optional) and flat/nested declarations may be freely mixed on one action;
+`resource_arguments` blocks may not be nested inside one another.
+
 ## Resolution timing
 
 `derive_from`/`arguments_from` blocks are stored **unevaluated** at declaration time and only

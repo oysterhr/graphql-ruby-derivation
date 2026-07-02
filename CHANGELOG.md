@@ -8,29 +8,70 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- `GraphQL::Derivation::Rails::ControllerConcern.resource_arguments(key, required: true, &block)`:
+  declares a Rails-idiomatic nested resource scope for an action (SPEC.md §8.1), so the request
+  wire format can match `form_for`/strong-parameters conventions (`{ expense: { title: ... } }`)
+  instead of every argument sitting flat at the top level. `argument`/`arguments_from` calls
+  inside the block are scoped to that resource; flat and nested arguments may be freely mixed on
+  one action. Mechanically sugar over the existing InputObject machinery: the block's own nested
+  InputObject is added as a plain, ordinary `argument key, NestedInputObjectClass, required:
+  required` on the action's InputObject, so all of `coerce_input`, collision detection, and
+  `arguments_from` cycle detection already handle it as a normal case. `required:` defaults to
+  `true` and is deliberately not inferable, since the nested type's own nullability
+  (`ExpensesCreateExpenseInput!` vs `...Input`) must be explicit for TypeScript codegen off the
+  generated SDL. Also defines a private `"#{key}_params"` instance helper (e.g. `expense_params`),
+  equivalent to `arguments[key]`, for familiar Rails-style call sites.
+  `#arguments`/`#{key}_params` now return nested values as plain, recursively-unwrapped Ruby
+  Hashes (via `#to_h`, not `#to_kwargs` -- see the `Changed` entry below), not
+  `GraphQL::Schema::InputObject` instances.
+
+### Changed
+
+- **`GraphQL::Derivation::Rails::ArgumentSchema`'s introspection design.** Previously,
+  `register_input_object` registered every InputObject via `extra_types`. Building
+  `resource_arguments` surfaced a real bug in that design: `extra_types` can never make an
+  argument reachable in `Schema#to_definition` if the argument's own type is *also* an
+  InputObject (exactly the `resource_arguments` case), because graphql-ruby's SDL printer
+  explicitly skips InputObject-kind `extra_types` entries when computing reachability
+  (InputObject cannot be a field return type) -- confirmed with a minimal graphql-ruby-only
+  repro, not an `ArgumentSchema` bug specifically. `to_definition` is now overridden to delegate
+  printing to a fresh, disposable schema built on every call, with a real (synthetic, never
+  executed) `query` root exposing each registered *top-level* InputObject as a field argument.
+  Once the top-level InputObject is reachable via a real root, graphql-ruby's normal reachability
+  traversal correctly walks everything it references at any nesting depth, with no
+  `extra_types`/`orphan_types` special-casing needed -- so only top-level InputObjects need
+  registering now; a `resource_arguments` scope's own nested InputObject is reached automatically.
+  `#arguments`'s coercion path also switched from `Interpreter::Arguments#to_kwargs` to the
+  coerced InputObject instance's own `#to_h`, which (unlike `to_kwargs`) recursively unwraps a
+  nested InputObject argument value into a plain Hash -- identical output to `to_kwargs` for the
+  previously-only-supported flat case.
+- **Verified `graphql` dependency floor: `>= 2.1, < 3.0`.** An earlier iteration of this work
+  briefly raised the floor to `>= 2.3` in response to `extra_types` never being able to make a
+  nested-InputObject argument reachable -- but that turned out to be a general limitation of the
+  `extra_types`-based design on *any* graphql-ruby version, not a 2.1.x-specific gap. The
+  synthetic-query-root design (above) uses only plain, long-stable root-based reachability, and
+  works identically on graphql-ruby 2.1.x -- confirmed by running the full test suite against a
+  real graphql-ruby 2.1.15 install (SPEC.md §12.6's `gemfiles/graphql_2.1.gemfile`).
+- `GraphQL::Derivation::Rails::ArgumentSchema::NullQueryContext#types` now documents (and is
+  tested against) both `context.warden.arguments(...)`-based coercion (graphql-ruby 2.1.x-2.3.x)
+  and `context.types.arguments(...)`-based coercion (2.4+), reflecting the restored 2.1.x floor.
+
+### Added
+
 - `NOTICE` file listing every gemspec dependency and its license (all currently MIT), for Legal's
   OSS license-compatibility review. Update it in the same PR as any gemspec dependency change.
 - README disclosure: the gem is experimental (use at your own risk) and all code in the
   repository was written with agentic coding assistance.
-- `gemfiles/graphql_2.3.gemfile`, pinning `graphql ~> 2.3.0` (this gem's floor). CI now runs
+- `gemfiles/graphql_2.1.gemfile`, pinning `graphql ~> 2.1.0` (this gem's floor). CI now runs
   `bundle exec rspec` against both this and the main `Gemfile` (SPEC.md §12.6), so
-  `ArgumentSchema`'s graphql-ruby-2.3-and-up assumptions are exercised against a real old install,
-  not just the latest release.
+  `ArgumentSchema`'s graphql-ruby-2.1.x-and-up assumptions are exercised against a real old
+  install, not just the latest release.
 - `GraphQL::Derivation::Rails::ArgumentSchema::NullQueryContext`: this gem's own permanent
   replacement for `GraphQL::Query::NullContext` as the context `coerce_input` runs against.
   `NullContext` cannot be bound to a caller-supplied schema on any graphql-ruby version this gem
   supports (it stays a `Singleton` fixed to its own internal schema through at least 2.5.x, per
   SPEC.md §8.2), so this gem builds its own from the same stable primitives graphql-ruby's
   `NullContext` composes internally.
-
-### Changed
-
-- **Breaking:** raised the `graphql` dependency floor from `~> 2.0` to `>= 2.3, < 3.0`. 2.3.0 is
-  graphql-ruby's first release with `extra_types`, which `ArgumentSchema` needs to make anonymous
-  InputObjects introspectable (SPEC.md §1.2/§8.2) -- earlier releases (2.1.x/2.2.x) only have
-  `orphan_types`, which cannot make an InputObject visible in `Schema#to_definition` at all
-  (confirmed against a real graphql-ruby 2.1.15 install; this is an upstream limitation, not
-  something worth carrying a permanently-incomplete compatibility shim for).
 
 ### Changed
 

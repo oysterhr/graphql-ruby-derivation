@@ -1,19 +1,18 @@
 # Usage
 
 Getting-started guide, runnable examples. Full behavior/edge cases: see
-[`docs/SPEC.md`](docs/SPEC.md) — this doc friendlier front door, not
-replacement.
+[`docs/SPEC.md`](docs/SPEC.md) — this doc friendlier front door, not replacement.
 
 ## The problem
 
-GraphQL mutations/types duplicate fields elsewhere in schema:
-`CreateExpenseInput` re-declares half `ExpenseType`'s fields, `TeamMemberExpenseType`
-re-declares half `ExpenseType` again, Rails controller re-declares input's fields
-third time as inline `argument`s. Each duplication = place three can silently drift.
+GraphQL mutations/types duplicate fields already elsewhere in schema:
+`CreateExpenseInput` re-declare half `ExpenseType` fields, `TeamMemberExpenseType`
+re-declare half `ExpenseType` again, Rails controller re-declare input's fields
+third time as inline `argument`s. Every duplication = place three can silently drift.
 
-Gem let you declare relationship once — "this InputObject's arguments subset
+This gem let you declare relationships once — "this InputObject's arguments subset
 of that ObjectType's fields" — derives actual `GraphQL::Schema::Argument`/`Field`
-definitions from source, instead hand-copying.
+definitions from source, no hand-copy.
 
 ## Example 1 — derive InputObject arguments from an ObjectType
 
@@ -36,10 +35,10 @@ GraphQL::Derivation::DerivableInputObject.resolve_all! # triggers derivation (se
 ```
 
 `CreateExpenseInput` now has `title`/`expense_date`/`category` (required), `description`
-(optional, `prepare: :strip`), `receipt_id` (declared inline, coexists fine) —
-all sourced from `ExpenseType`'s existing field definitions.
+(optional, `prepare: :strip`), `receipt_id` (inline, coexists fine) —
+all sourced from `ExpenseType`'s existing field defs.
 
-`derive_from`'s source can also be **Mutation class** with arguments declared
+`derive_from`'s source can also be **Mutation class** with args declared
 directly on it (common graphql-ruby style, no separate InputObject):
 
 ```ruby
@@ -53,10 +52,9 @@ class UpdateExpenseInput < GraphQL::Schema::InputObject
 end
 ```
 
-Works transparently — Mutation class expose arguments same way InputObject
-does, derived from identically, no separate API to learn. Same applies to
-Rails `arguments_from` DSL (Example 4 below): pass Mutation class wherever InputObject
-class accepted.
+Works transparent — Mutation class expose args same way InputObject does, derived
+identically, no separate API to learn. Same for Rails `arguments_from` DSL
+(Example 4 below): pass Mutation class wherever InputObject class accepted.
 
 ## Example 2 — derive ObjectType fields from another ObjectType
 
@@ -118,13 +116,40 @@ end
 Call `ExpensesController.eager_load_argument_sources!` in CI spec so cycles/typos in
 `arguments_from` sources fail build, not live request.
 
+Default: arguments read flat, top level of request body. For Rails-idiomatic
+nested shape instead — `{ expense: { title: ..., amountCents: ... } }`, matching `form_for`/
+strong-parameters conventions — wrap relevant declarations in `resource_arguments`:
+
+```ruby
+class ExpensesController < ApplicationController
+  argument :page, GraphQL::Types::Int, required: false   # stays flat: params['page']
+
+  resource_arguments :expense do                          # nested: params['expense']
+    arguments_from CreateExpenseInput do |pick|
+      pick.required :title, :amount_cents
+      pick.optional :description
+    end
+  end
+
+  def create
+    arguments        # => { page: 2, expense: { title: "Lunch", amount_cents: 1200, description: nil } }
+    expense_params    # => { title: "Lunch", amount_cents: 1200, description: nil } -- shorthand for arguments[:expense]
+  end
+end
+```
+
+`resource_arguments` also define private `"#{key}_params"` helper (`expense_params` above),
+familiar Rails call site. `required:` default `true` (pass `required: false` if
+whole nested key optional), flat/nested declarations mix freely one action;
+`resource_arguments` blocks can't nest inside each other.
+
 ## Resolution timing
 
 `derive_from`/`arguments_from` blocks stored **unevaluated** at declaration time, evaluated
 once, on resolution. Outside Rails, call `resolve_all!` yourself (schema
 initializer or test helper). Inside Rails, plugin resolves lazily on first use, but if app
 reloads classes in dev/test, wire re-resolution + cache-clearing through Rails
-reloader — see `docs/SPEC.md` §6.3/§7.3/§8.2 exact hooks
+reloader — see `docs/SPEC.md` §6.3/§7.3/§8.2 for exact hooks
 (`Rails.application.reloader.to_prepare` / `before_class_unload` +
 `GraphQL::Derivation::Rails.reset_for_reload!`).
 
@@ -145,19 +170,19 @@ reloader — see `docs/SPEC.md` §6.3/§7.3/§8.2 exact hooks
 - **`PickFields`**: `description:`, `deprecation_reason:`, `null:`, `method:`, `resolver:`,
   `name:`, `camelize:`.
 
-Option outside these lists raises `ConfigurationError` immediately, with "did you mean"
-suggestion for likely typos.
+Pass option outside these lists → raises `ConfigurationError` immediately, with
+"did you mean" suggestion for likely typos.
 
 ## Error glossary
 
 | Error | Raised when |
 |---|---|
 | `GraphQL::Derivation::ConfigurationError` | Any invalid declaration: unknown field, unselected-field override, empty pick block, double `derive_from`, inline/derived name collision, unknown override key. Always at load/resolution time, never mid-request. |
-| `GraphQL::Derivation::CyclicDependencyError` | `derive_from` chain cycles back on itself, e.g. `A → B → A` (message includes full path). Also raised by `eager_load_argument_sources!` for sibling-action cycles. |
+| `GraphQL::Derivation::CyclicDependencyError` | A `derive_from` chain cycles back on itself, e.g. `A → B → A` (message includes full path). Also raised by `eager_load_argument_sources!` for sibling-action cycles. |
 | `GraphQL::Derivation::UnresolvableFieldError` | Field resolves via custom class-method resolver (Case 3, SPEC §5.3), selected without explicit `method:`/`resolver:` override. |
 | `GraphQL::Derivation::UnsupportedColumnTypeError` | ActiveRecord column type has no GraphQL mapping (e.g. `:jsonb`, unmappable `:array` element type). |
 | `GraphQL::Derivation::Rails::MissingInputTypeError` | `arguments` called from controller action that never declared `argument`/`arguments_from`. |
-| `GraphQL::Derivation::Rails::ArgumentParsingError` | Request-time coercion failure (missing required arg, bad type, bad enum value) — one error in list **not** a `ConfigurationError`. |
+| `GraphQL::Derivation::Rails::ArgumentParsingError` | Request-time coercion failure (missing required arg, bad type, bad enum value) — only error here **not** a `ConfigurationError`. |
 
 ## Where to go next
 

@@ -3,8 +3,11 @@
 require 'graphql/derivation/rails'
 
 RSpec.describe GraphQL::Derivation::Rails::ArgumentSchema do
-  before { described_class.reset! }
-  after { described_class.reset! }
+  # Explicit constant, not `described_class` -- the nested `NullQueryContext`
+  # describe block below has a different `described_class`, but still needs
+  # this same schema-registry reset.
+  before { GraphQL::Derivation::Rails::ArgumentSchema.reset! }
+  after { GraphQL::Derivation::Rails::ArgumentSchema.reset! }
 
   describe '.for' do
     it 'returns the same schema class across calls for one namespace' do
@@ -24,7 +27,7 @@ RSpec.describe GraphQL::Derivation::Rails::ArgumentSchema do
     end
   end
 
-  describe 'orphan type registration' do
+  describe 'extra type registration' do
     let(:input_object) do
       Class.new(GraphQL::Schema::InputObject) do
         graphql_name 'WidgetCreateInput'
@@ -173,6 +176,71 @@ RSpec.describe GraphQL::Derivation::Rails::ArgumentSchema do
       schema = described_class.for(:widgets)
 
       expect(schema.coercion_context.schema).to equal(schema)
+    end
+  end
+
+  # SPEC.md §8.2 "graphql-ruby version compatibility": `GraphQL::Query::
+  # NullContext` cannot be used here on any graphql-ruby version this gem
+  # supports (its `.new` stays private/Singleton-bound through at least
+  # 2.5.x), so `NullQueryContext` is this gem's own permanent replacement.
+  # This exercises its contract directly, independent of the coercion tests
+  # elsewhere that only exercise it indirectly.
+  describe GraphQL::Derivation::Rails::ArgumentSchema::NullQueryContext do
+    subject(:context) { described_class.new(schema: schema) }
+
+    let(:schema) { GraphQL::Derivation::Rails::ArgumentSchema.for(:widgets) }
+
+    it 'exposes the schema it was built for' do
+      expect(context.schema).to equal(schema)
+    end
+
+    it 'exposes a warden whose #arguments resolves an InputObject class own argument set' do
+      input_object = Class.new(GraphQL::Schema::InputObject) do
+        graphql_name 'NullQueryContextWidgetInput'
+        argument :title, String, required: true
+      end
+
+      expect(context.warden.arguments(input_object).map(&:graphql_name)).to contain_exactly('title')
+    end
+
+    it 'treats every argument as visible via the warden (all-types-visible semantics)' do
+      argument = GraphQL::Schema::Argument.new(:title, String, owner: nil, required: true)
+      expect(context.warden.visible_argument?(argument)).to be(true)
+    end
+
+    it 'exposes a visibility profile via #types, backed by the same warden' do
+      expect(context.types.arguments(GraphQL::Schema::InputObject)).to eq([])
+    end
+
+    it 'runs #query.after_lazy synchronously with the given value' do
+      expect(context.query.after_lazy(:already_resolved) { |v| v }).to eq(:already_resolved)
+    end
+
+    it 'runs dataloader jobs synchronously via #dataloader.append_job' do
+      ran = false
+      context.dataloader.append_job { ran = true }
+
+      expect(ran).to be(true)
+    end
+
+    it 'returns nil for an unset key via #[]' do
+      expect(context[:anything]).to be_nil
+    end
+
+    it 'returns the given default via #fetch' do
+      expect(context.fetch(:anything, :default)).to eq(:default)
+    end
+
+    it 'returns nil via #dig' do
+      expect(context.dig(:anything, :nested)).to be_nil
+    end
+
+    it 'returns false via #key?' do
+      expect(context.key?(:anything)).to be(false)
+    end
+
+    it 'returns an empty Hash via #to_h' do
+      expect(context.to_h).to eq({})
     end
   end
 end

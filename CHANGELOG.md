@@ -12,6 +12,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   OSS license-compatibility review. Update it in the same PR as any gemspec dependency change.
 - README disclosure: the gem is experimental (use at your own risk) and all code in the
   repository was written with agentic coding assistance.
+- `gemfiles/graphql_2.3.gemfile`, pinning `graphql ~> 2.3.0` (this gem's floor). CI now runs
+  `bundle exec rspec` against both this and the main `Gemfile` (SPEC.md §12.6), so
+  `ArgumentSchema`'s graphql-ruby-2.3-and-up assumptions are exercised against a real old install,
+  not just the latest release.
+- `GraphQL::Derivation::Rails::ArgumentSchema::NullQueryContext`: this gem's own permanent
+  replacement for `GraphQL::Query::NullContext` as the context `coerce_input` runs against.
+  `NullContext` cannot be bound to a caller-supplied schema on any graphql-ruby version this gem
+  supports (it stays a `Singleton` fixed to its own internal schema through at least 2.5.x, per
+  SPEC.md §8.2), so this gem builds its own from the same stable primitives graphql-ruby's
+  `NullContext` composes internally.
+
+### Changed
+
+- **Breaking:** raised the `graphql` dependency floor from `~> 2.0` to `>= 2.3, < 3.0`. 2.3.0 is
+  graphql-ruby's first release with `extra_types`, which `ArgumentSchema` needs to make anonymous
+  InputObjects introspectable (SPEC.md §1.2/§8.2) -- earlier releases (2.1.x/2.2.x) only have
+  `orphan_types`, which cannot make an InputObject visible in `Schema#to_definition` at all
+  (confirmed against a real graphql-ruby 2.1.15 install; this is an upstream limitation, not
+  something worth carrying a permanently-incomplete compatibility shim for).
 
 ### Changed
 

@@ -1,0 +1,22 @@
+# frozen_string_literal: true
+
+# SPEC.md §8.2 "graphql-ruby version compatibility" / §12.6 "graphql-ruby version matrix":
+# pins graphql to this gem's verified floor so CI runs the real test suite against a real
+# install of the oldest supported graphql-ruby release, exercising ArgumentSchema's
+# `extra_types`-availability assumption instead of leaving it permanently untested.
+#
+# Run with: BUNDLE_GEMFILE=gemfiles/graphql_2.3.gemfile bundle exec rspec
+
+source 'https://rubygems.org'
+
+gemspec path: '..'
+
+gem 'graphql', '~> 2.3.0'
+
+group :development, :test do
+  gem 'rake'
+  gem 'rspec', '~> 3.13'
+  gem 'rubocop', '~> 1.81', require: false
+  gem 'rubocop-performance', '~> 1.26', require: false
+  gem 'rubocop-rspec', '~> 3.7', require: false
+end

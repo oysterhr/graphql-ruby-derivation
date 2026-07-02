@@ -68,6 +68,26 @@ RSpec.describe GraphQL::Derivation::Rails::ControllerConcern do
       end
     end
 
+    context 'with an arguments_from Mutation class source' do
+      let(:controller) do
+        build_controller do
+          arguments_from FixtureSchema::CreateExpenseMutation do |pick|
+            pick.required :title
+            pick.optional :amount_cents
+          end
+          def create; end
+        end
+      end
+
+      it 'returns the coerced hash derived from the mutation arguments, same as an ObjectType source' do
+        instance = instance_for(
+          controller, action: :create, params: {'title' => 'Lunch', 'amountCents' => 1200},
+        )
+
+        expect(instance.arguments).to eq(title: 'Lunch', amount_cents: 1200)
+      end
+    end
+
     context 'with an action that declared nothing' do
       let(:controller) do
         build_controller do

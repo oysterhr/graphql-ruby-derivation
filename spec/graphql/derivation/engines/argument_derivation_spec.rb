@@ -137,6 +137,31 @@ RSpec.describe GraphQL::Derivation::ArgumentDerivation do
       end
     end
 
+    context 'with a Mutation source' do
+      it 'returns configured arguments using identity type mapping' do
+        arguments = resolve(FixtureSchema::CreateExpenseMutation) do |pick|
+          pick.required(:title)
+          pick.optional(:category)
+        end
+
+        expect(arguments.map(&:graphql_name)).to contain_exactly('title', 'category')
+      end
+
+      it 'reuses the mutation argument type directly' do
+        arguments = resolve(FixtureSchema::CreateExpenseMutation) { |pick| pick.optional(:title) }
+        title = arguments.find { |argument| argument.graphql_name == 'title' }
+
+        expect(title.type.unwrap).to eq(FixtureSchema::CreateExpenseMutation.arguments['title'].type.unwrap)
+      end
+
+      it 'lets the pick block re-control nullability regardless of the mutation argument nullability' do
+        arguments = resolve(FixtureSchema::CreateExpenseMutation) { |pick| pick.optional(:title) }
+        title = arguments.find { |argument| argument.graphql_name == 'title' }
+
+        expect(title.type).not_to be_non_null
+      end
+    end
+
     context 'with a Symbol (sibling action) source' do
       # SPEC.md §4.2: Symbol sources are resolved via a `context:` object that
       # responds to `resolve_sibling_arguments(symbol)`. This is the seam the

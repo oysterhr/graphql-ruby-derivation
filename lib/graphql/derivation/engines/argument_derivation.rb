@@ -23,7 +23,8 @@ module GraphQL
 
       # @param source [Class, Symbol] An ObjectType class
       #   (`< GraphQL::Schema::Object`), an InputObject class
-      #   (`< GraphQL::Schema::InputObject`), or a Symbol naming a sibling
+      #   (`< GraphQL::Schema::InputObject`), a Mutation class
+      #   (`< GraphQL::Schema::Mutation`), or a Symbol naming a sibling
       #   action (SPEC.md §4.1).
       # @param pick_block [Proc] Called with a `PickArguments` instance.
       # @param context [#resolve_sibling_arguments, nil] Only consulted when
@@ -50,13 +51,20 @@ module GraphQL
 
       # SPEC.md §4.2: dispatches to the appropriate mapper based on the
       # source's type. Any source type other than ObjectType, InputObject,
-      # or Symbol raises a plain `ArgumentError` immediately (i.e. at
-      # declaration time, not at resolution time -- there is nothing to
+      # Mutation, or Symbol raises a plain `ArgumentError` immediately (i.e.
+      # at declaration time, not at resolution time -- there is nothing to
       # defer here since the source's class is already known).
       def enumerate_candidates(source, context)
         if object_type_source?(source)
           Mappers::ObjectTypeToArgument.candidates(source)
-        elsif input_object_source?(source)
+        elsif input_object_source?(source) || mutation_source?(source)
+          # Mutation classes declare their arguments the same way InputObjects
+          # do (both extend `GraphQL::Schema::Member::HasArguments`, so
+          # `.arguments` returns the same shape of `{name => Argument}`), so
+          # `InputObjectToArgument` -- despite its name -- already produces
+          # correct identity-mapped candidates for a Mutation source without
+          # any changes. This is the "reconduct to the existing case" that
+          # SPEC.md §4.2 describes: no separate mapper needed.
           Mappers::InputObjectToArgument.candidates(source)
         elsif source.is_a?(Symbol)
           sibling_candidates(source, context)
@@ -67,8 +75,8 @@ module GraphQL
 
       def raise_unsupported_source_error(source)
         raise ArgumentError,
-          "Unsupported ArgumentDerivation source: #{source.inspect}. " \
-          'Expected an ObjectType class, an InputObject class, or a Symbol naming a sibling action.'
+          "Unsupported ArgumentDerivation source: #{source.inspect}. Expected an ObjectType " \
+          'class, an InputObject class, a Mutation class, or a Symbol naming a sibling action.'
       end
 
       # A human-readable identifier for +source+, used only for error
@@ -97,6 +105,14 @@ module GraphQL
 
       def input_object_source?(source)
         source.is_a?(Class) && source < GraphQL::Schema::InputObject
+      end
+
+      # SPEC.md §4.1/§4.2 "Mutation source": a mutation class with arguments
+      # declared directly on it (the common graphql-ruby style), rather than
+      # a separate InputObject. Covers `GraphQL::Schema::Mutation` and its
+      # subclasses (e.g. `GraphQL::Schema::RelayClassicMutation`).
+      def mutation_source?(source)
+        source.is_a?(Class) && source < GraphQL::Schema::Mutation
       end
 
       # SPEC.md §4.1/§4.2: Symbol sources name a sibling action. Resolution is
@@ -158,6 +174,7 @@ module GraphQL
 
       private_class_method :object_type_source?,
         :input_object_source?,
+        :mutation_source?,
         :raise_unsupported_source_error,
         :source_name,
         :sibling_candidates,

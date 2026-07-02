@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- `GraphQL::Derivation::ArgumentDerivation` now accepts a Mutation class
+  (`< GraphQL::Schema::Mutation`, including `GraphQL::Schema::RelayClassicMutation`) as a source,
+  in addition to ObjectType/InputObject/Symbol (SPEC §4.1/§4.2). A mutation's arguments are
+  identity-mapped exactly like an InputObject's -- both extend
+  `GraphQL::Schema::Member::HasArguments`, so the existing `InputObjectToArgument` mapper handles
+  Mutation sources unchanged. `DerivableInputObject#derive_from` and the Rails
+  `ControllerConcern#arguments_from` accept a Mutation class transparently, with no caller-side
+  special-casing required.
 - `GraphQL::Derivation` error hierarchy: `Error`, `ConfigurationError`, `CyclicDependencyError`,
   `UnresolvableFieldError`, `UnsupportedColumnTypeError` (SPEC §2).
 - Pick DSL: `PickArguments` and `PickFields`, the block interface used by argument and field

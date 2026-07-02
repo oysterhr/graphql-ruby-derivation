@@ -28,4 +28,17 @@ RSpec.describe GraphQL::Derivation::Mappers::InputObjectToArgument do
       expect(candidates[:description].type).not_to be_non_null
     end
   end
+
+  describe '.candidates with a Mutation class source (SPEC.md §4.2 "Mutation source")' do
+    subject(:candidates) { described_class.candidates(FixtureSchema::CreateExpenseMutation) }
+
+    it 'returns a candidate for every argument declared on the mutation, unchanged' do
+      expect(candidates.keys).to contain_exactly(:title, :description, :amount_cents, :category)
+    end
+
+    it 'reuses the mutation argument type directly, the same as an InputObject source' do
+      source_type = FixtureSchema::CreateExpenseMutation.arguments['title'].type
+      expect(candidates[:title].type).to eq(source_type.unwrap)
+    end
+  end
 end

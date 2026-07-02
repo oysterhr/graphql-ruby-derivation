@@ -39,6 +39,25 @@ GraphQL::Derivation::DerivableInputObject.resolve_all! # triggers derivation (se
 (optional, with `prepare: :strip`), and `receipt_id` (declared inline, coexists fine) —
 all sourced from `ExpenseType`'s existing field definitions.
 
+`derive_from`'s source can just as well be a **Mutation class** with arguments declared
+directly on it (the common graphql-ruby style, no separate InputObject):
+
+```ruby
+class UpdateExpenseInput < GraphQL::Schema::InputObject
+  include GraphQL::Derivation::DerivableInputObject
+
+  derive_from Mutations::CreateExpense do |pick| # < GraphQL::Schema::Mutation
+    pick.required :title
+    pick.optional :category
+  end
+end
+```
+
+This works transparently — a Mutation class exposes its arguments the same way an InputObject
+does, so it is derived from identically, with no separate API to learn. The same applies to the
+Rails `arguments_from` DSL (Example 4 below): pass a Mutation class wherever an InputObject class
+is accepted.
+
 ## Example 2 — derive ObjectType fields from another ObjectType
 
 ```ruby

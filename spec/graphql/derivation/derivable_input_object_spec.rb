@@ -105,6 +105,19 @@ RSpec.describe GraphQL::Derivation::DerivableInputObject do
 
       expect(input_class.arguments.keys).to contain_exactly('receiptId')
     end
+
+    it 'derives arguments from a Mutation class source transparently, same as an InputObject source' do
+      input_class = build_input_object_class do
+        derive_from FixtureSchema::CreateExpenseMutation do |pick|
+          pick.required(:title, :amount_cents)
+          pick.optional(:category)
+        end
+      end
+
+      described_class.resolve_all!
+
+      expect(input_class.arguments.keys).to contain_exactly('title', 'amountCents', 'category')
+    end
   end
 
   describe 'collision detection (§10.4 integration)' do

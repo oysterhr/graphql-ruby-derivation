@@ -211,12 +211,13 @@ Accepts a source and an unevaluated pick block. Returns an array of configured
 
 ### 4.1 Source Types
 
-Three source types are supported, distinguished by the type of the source argument:
+Four source types are supported, distinguished by the type of the source argument:
 
 | Source | Type check |
 |---|---|
 | ObjectType | `source < GraphQL::Schema::Object` |
 | InputObject | `source < GraphQL::Schema::InputObject` |
+| Mutation | `source < GraphQL::Schema::Mutation` (covers `GraphQL::Schema::RelayClassicMutation` too) |
 | Sibling action | `source.is_a?(Symbol)` — resolved via the ControllerConcern registry |
 
 Any other source raises `ArgumentError` immediately at declaration time.
@@ -236,6 +237,15 @@ The resulting candidates are mapped to argument types using the table in §4.3.
 **InputObject source:**
 `source.arguments.values` — all arguments on the InputObject, including inherited arguments.
 No exclusions. Type mapping is identity: the argument's type is reused directly.
+
+**Mutation source:**
+Mutations declare arguments directly on the mutation class (the idiomatic graphql-ruby style)
+rather than via a separate InputObject. A `GraphQL::Schema::Mutation` subclass extends the same
+`GraphQL::Schema::Member::HasArguments` module an InputObject does, so `source.arguments` returns
+arguments in the identical shape — this source type is therefore reconducted to the InputObject
+case: `source.arguments.values`, same identity type mapping, no exclusions, no separate mapper.
+`arguments_from`/`derive_from` accept a Mutation class exactly where they accept an InputObject
+class, with no special-casing required by the caller.
 
 **Sibling source:**
 The sibling is resolved by looking up the action's registered argument set in the
@@ -883,6 +893,8 @@ ObjectType fields         →  InputObject args      ✓  (primary use case)
 ObjectType fields         →  ObjectType fields     ✓  (field copying)
 InputObject args          →  InputObject args      ✓  (cross-input sharing)
 InputObject args          →  ObjectType fields     ✗  forbidden; raises ArgumentError
+Mutation arguments        →  InputObject args      ✓  (identity map, same path as InputObject args)
+Mutation arguments        →  ObjectType fields     ✗  not applicable
 Symbol (sibling action)   →  InputObject args      ✓  (ControllerConcern only)
 Symbol (sibling action)   →  ObjectType fields     ✗  not applicable
 ```

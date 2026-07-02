@@ -7,6 +7,12 @@ module GraphQL
       # §4.2 ("InputObject source"). The mapping is an identity map: every
       # argument is a candidate (no exclusions), and the argument's type is
       # reused directly.
+      #
+      # Also used, unchanged, for Mutation-class sources (SPEC.md §4.2
+      # "Mutation source"): a `GraphQL::Schema::Mutation` subclass exposes
+      # `.arguments` in the exact same shape as an InputObject (both extend
+      # `GraphQL::Schema::Member::HasArguments`), so `ArgumentDerivation`
+      # routes both source types here rather than duplicating this mapper.
       class InputObjectToArgument
         # A regular candidate carrying an already-resolved type. Mirrors
         # ObjectTypeToArgument::Candidate so ArgumentDerivation can treat

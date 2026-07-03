@@ -618,10 +618,24 @@ amount_cents: 1200 }, page: 2 }`) -- exactly the shape a controller action would
 from `params[:expense]`. Memoized per request.
 
 Resolution: on first call, the registered InputObject for the action is resolved (triggering
-lazy derivation if not yet resolved, including any `resource_arguments` scopes), then
+lazy derivation if not yet resolved, including any `resource_arguments` scopes), then the raw
+request input is filtered down to only the keys the InputObject actually declares (see below),
 `coerce_input` is called via the namespace's `ArgumentSchema` context, and the resulting
 InputObject instance's `#to_h` (not `#to_kwargs` -- `to_h` recursively unwraps nested
 InputObjects into plain Hashes; `to_kwargs` does not) is cached in an instance variable.
+
+**Unknown top-level keys are silently ignored, not a validation error.** A real Rails `params`
+always includes routing internals (`controller`, `action`) and every dynamic route segment
+(e.g. `params[:engagement_id]` for a nested resource route), regardless of whether any of them
+are declared as arguments. Before validating/coercing, the raw input is filtered to
+`raw_input.slice(*input_object.arguments.keys)` -- exactly Rails' own strong-parameters
+philosophy (`params.permit(...)` silently drops unpermitted keys rather than raising). Without
+this, `arguments` would raise `ArgumentParsingError` ("Field is not defined on ...Input") for
+`controller`/`action`/every unused route segment on essentially every real request, since the
+gem's own validation (`InputObject#validate_input`) is strict about declared-only input. Fixture
+-based specs whose `params:` stub is a plain Hash with only the fields under test (no
+`controller`/`action`/route segments) do not exercise this path -- it only shows up against a
+real `ActionController::Parameters` from an actual request.
 
 Raises:
 - `GraphQL::Derivation::Rails::MissingInputTypeError` (subclass of `ConfigurationError`) if no

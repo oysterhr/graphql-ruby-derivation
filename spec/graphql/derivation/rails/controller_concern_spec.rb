@@ -166,6 +166,36 @@ RSpec.describe GraphQL::Derivation::Rails::ControllerConcern do
       end
     end
 
+    # Reproduces a real production failure (not caught by any other spec here,
+    # since every other example stubs `params` as a bare Hash containing only
+    # the fields under test). A real Rails `params` always includes routing
+    # internals (`controller`, `action`) and every dynamic route segment
+    # (e.g. `engagement_id` for a nested resource route), regardless of
+    # whether any of them are declared as arguments -- SPEC.md §8.1
+    # "Unknown top-level keys are silently ignored, not a validation error".
+    context 'with real-Rails-style extraneous top-level params (controller/action/route segments)' do
+      let(:controller) do
+        build_controller do
+          resource_arguments :time_off_request do
+            argument :start_date, String, required: true
+          end
+          def create; end
+        end
+      end
+
+      it 'ignores controller/action/route-segment keys instead of raising ArgumentParsingError' do
+        params = ActionController::Parameters.new(
+          'controller' => 'team_members/time_offs',
+          'action' => 'create',
+          'engagement_id' => '123',
+          'timeOffRequest' => {'startDate' => '2024-01-01'},
+        )
+        instance = instance_for(controller, action: :create, params: params)
+
+        expect(instance.arguments).to eq(time_off_request: {start_date: '2024-01-01'})
+      end
+    end
+
     context 'with required: false' do
       let(:controller) do
         build_controller do

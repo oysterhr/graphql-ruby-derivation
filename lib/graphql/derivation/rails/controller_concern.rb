@@ -444,7 +444,15 @@ module GraphQL
         end
 
         def coerce_with_input_object(input_object, context)
-          raw_input = graphql_argument_input
+          # SPEC.md §8.1 "Unknown top-level keys are silently ignored": a
+          # real Rails `params` always includes routing internals
+          # (`controller`, `action`) and every dynamic route segment,
+          # regardless of whether any of them are declared as arguments.
+          # Filtered out before validation -- exactly Rails' own
+          # strong-parameters philosophy (`params.permit(...)` silently
+          # drops unpermitted keys rather than raising) -- so they don't
+          # trip `validate_input`'s "Field is not defined" check.
+          raw_input = graphql_argument_input.slice(*input_object.arguments.keys)
           validate_request_input!(input_object, raw_input, context)
 
           coerced = context.schema.sync_lazy(input_object.coerce_input(raw_input, context))

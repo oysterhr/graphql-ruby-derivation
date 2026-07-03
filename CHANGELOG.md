@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- `ControllerConcern#arguments` no longer raises `ArgumentParsingError` ("Field is not defined")
+  for Rails routing internals (`controller`, `action`) or any dynamic route segment not declared
+  as an argument (e.g. `params[:engagement_id]` on a nested resource route). A real Rails
+  `params` always includes these regardless of what an action declares; they are now filtered
+  out (`raw_input.slice(*input_object.arguments.keys)`) before validation/coercion, matching
+  Rails' own strong-parameters philosophy of silently dropping unpermitted keys rather than
+  raising (SPEC.md §8.1). Found via a real controller spec in a consuming app -- every existing
+  spec here stubbed `params` as a bare Hash containing only the fields under test, so none of
+  them exercised a `params` shaped like a real request.
+
 ### Added
 
 - `GraphQL::Derivation::Rails::ControllerConcern.resource_arguments(key, required: true, &block)`:

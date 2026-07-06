@@ -14,8 +14,7 @@ from existing types, instead of hand-writing (and re-writing, and drifting) the 
 
 ## Install
 
-Not yet published to RubyGems (see [`AGENTS.md`](AGENTS.md) for why) — install directly from
-GitHub for now:
+Not yet published to RubyGems — install directly from GitHub for now:
 
 ```ruby
 # Gemfile

@@ -44,6 +44,12 @@ Implemented / N/A per section). Whenever you start or finish implementing part o
   than removing it prematurely. Oyster's OSS release policy (Engineering review + Legal
   coordination, pre-release security review, `CONTRIBUTING.md` requirement) also applies — see
   `CONTRIBUTING.md` for the contributor-facing side of it.
+- **Not published to RubyGems yet, by choice:** deliberately deferred rather than blocking on it.
+  The gem name isn't final (may change before a real release), and publishing early would mean
+  reserving a name that might not stick. Consumers install directly from GitHub (README's
+  Install section) in the meantime. Reserving the RubyGems name, enabling MFA on the owning
+  account, and preferring Trusted Publishing over API keys are all deferred alongside it — revisit
+  together once the name is settled, not piecemeal.
 - **CI:** GitHub Actions (`.github/workflows/ci.yml`), runs `bundle exec rspec` and
   `bundle exec rubocop` on push/PR.
 - **Lint:** rubocop + `rubocop-rspec` + `rubocop-performance`. Base ruleset mirrors

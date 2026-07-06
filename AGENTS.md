@@ -34,8 +34,8 @@ Implemented / N/A per section). Whenever you start or finish implementing part o
 ## Decisions on record
 
 - **Gemspec authors:** `Oyster HR, Inc. Engineers`, email `developers@oysterhr.com` — matches the
-  convention Legal (Jeff May) and Oyster's `tabasco` gem settled on for OSS releases: a
-  departmental name/email with "no chance of being decommissioned," not an individual's.
+  convention Legal and Oyster's `tabasco` gem settled on for OSS releases: a departmental
+  name/email with "no chance of being decommissioned," not an individual's.
 - **OSS release process:** every dependency declared in the gemspec is mirrored in `NOTICE`
   (name + license). Update `NOTICE` in the same PR as any gemspec dependency change — this is
   the artifact Legal asks for when reviewing a release for license-compatibility (MIT vs. any

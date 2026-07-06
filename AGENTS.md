@@ -41,7 +41,9 @@ Implemented / N/A per section). Whenever you start or finish implementing part o
   the artifact Legal asks for when reviewing a release for license-compatibility (MIT vs. any
   copyleft dependency). The gem is marked **experimental** (README + gemspec `summary`/
   `description`) until a stable release is cut; keep that wording in sync with reality rather
-  than removing it prematurely.
+  than removing it prematurely. Oyster's OSS release policy (Engineering review + Legal
+  coordination, pre-release security review, `CONTRIBUTING.md` requirement) also applies — see
+  `CONTRIBUTING.md` for the contributor-facing side of it.
 - **CI:** GitHub Actions (`.github/workflows/ci.yml`), runs `bundle exec rspec` and
   `bundle exec rubocop` on push/PR.
 - **Lint:** rubocop + `rubocop-rspec` + `rubocop-performance`. Base ruleset mirrors

@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- `CONTRIBUTING.md`, per Oyster's OSS release policy's "Release Requirements" (README must
+  document contribution guidelines; a `CONTRIBUTING.md`, if applicable, should be included).
+  Human-oriented; points to `AGENTS.md` for full process detail.
+
 ### Fixed
 
 - `ControllerConcern#arguments` no longer raises `ArgumentParsingError` ("Field is not defined")

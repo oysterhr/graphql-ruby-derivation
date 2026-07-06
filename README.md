@@ -67,8 +67,8 @@ bundle exec rubocop
 Git hooks (via [lefthook](https://github.com/evilmartians/lefthook)) run rubocop on commit and
 the full test suite on push.
 
-Contribution/process conventions (commit style, PR scope, how the spec and docs relate) live in
-[`AGENTS.md`](AGENTS.md).
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for how to propose a change. Full process conventions
+(commit style, PR scope, how the spec and docs relate) live in [`AGENTS.md`](AGENTS.md).
 
 ## License
 

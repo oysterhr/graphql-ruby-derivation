@@ -94,9 +94,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Changed
 
 - Gemspec `authors`/`email` changed from `Oyster HR Developers` / `engineering-paperwork@oysterhr.com`
-  to `Oyster HR, Inc. Engineers` / `developers@oysterhr.com`, matching the convention Legal and
-  the `tabasco` gem settled on for OSS releases (a durable departmental identity, not an
-  individual's).
+  to `Oyster HR, Inc. Engineers` / `developers@oysterhr.com`, matching the convention Legal
+  settled on for OSS releases (a durable departmental identity, not an individual's).
 - Gemspec `summary`/`description` now note the gem is experimental.
 
 - `GraphQL::Derivation::ArgumentDerivation` now accepts a Mutation class

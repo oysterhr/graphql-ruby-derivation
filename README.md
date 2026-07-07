@@ -29,8 +29,10 @@ bundle install
   InputObject, or sibling controller action.
 - Derive `GraphQL::Schema::Field`s for an ObjectType from another ObjectType or an ActiveRecord
   model.
-- Optional Rails controller integration (`argument`/`arguments_from`/`arguments`) and an
-  ActiveRecord column-to-GraphQL-type adapter.
+- Optional Rails controller integration (`argument`/`arguments_from`/`arguments`) that gives any
+  controller action strongly-typed, coerced, validated input — a real upgrade over Rails strong
+  parameters, which only allowlists keys and does no type coercion or validation.
+- ActiveRecord column-to-GraphQL-type adapter.
 
 Three independently requireable layers — use only what you need:
 

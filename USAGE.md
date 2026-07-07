@@ -95,6 +95,21 @@ Column types map to GraphQL types automatically (strings, numerics, dates, enums
 
 ## Example 4 — Rails controller arguments
 
+`ControllerConcern` gives a controller action strongly-typed, coerced, validated input, not just
+an allowlist. Rails strong parameters (`params.require(:expense).permit(:title, :amount_cents)`)
+only says which keys are allowed through — it does no type coercion and no validation, so a
+string `"amount_cents"` or a missing required key both sail through untouched, to fail (or
+silently misbehave) further down in your action. `ControllerConcern` runs the same
+`GraphQL::Schema::Argument`/`InputObject` coercion and validation machinery graphql-ruby uses
+for a real mutation, against plain Rails request params — required keys missing or badly typed
+values raise `ArgumentParsingError` before your action body runs, exactly like a failed mutation
+argument would.
+
+### Plain, standalone arguments
+
+No `derive_from`/`arguments_from` source is required — `argument` alone is enough to get typed,
+coerced, validated input for an action:
+
 ```ruby
 require 'graphql/derivation/rails'
 
@@ -102,6 +117,29 @@ class ApplicationController < ActionController::Base
   include GraphQL::Derivation::Rails::ControllerConcern
 end
 
+class ReportsController < ApplicationController
+  argument :starts_on, GraphQL::Types::ISO8601Date, required: true
+  argument :ends_on, GraphQL::Types::ISO8601Date, required: true
+  argument :format, GraphQL::Types::String, required: false, default_value: 'csv'
+
+  def export
+    arguments # => { starts_on: #<Date>, ends_on: #<Date>, format: "csv" }
+    # ... use the coerced hash
+  end
+end
+```
+
+`starts_on`/`ends_on` are parsed into real `Date` objects (or raise `ArgumentParsingError` if
+unparseable/missing) — the same type coercion a GraphQL argument of this type gets, with no
+InputObject/ObjectType to derive from and no separate validation step to hand-write.
+
+### Deriving arguments from an existing source
+
+Where an ObjectType, InputObject, or Mutation with the same fields already exists,
+`arguments_from` derives the controller's arguments from it instead of re-declaring them with
+`argument`:
+
+```ruby
 class ExpensesController < ApplicationController
   arguments_from CreateExpenseInput do |pick|
     pick.required :title, :amount_cents
@@ -117,6 +155,8 @@ end
 
 Call `ExpensesController.eager_load_argument_sources!` in a CI spec so cycles/typos in
 `arguments_from` sources fail the build instead of a live request.
+
+### Nested resource arguments
 
 By default, arguments are read flat, at the top level of the request body. For a Rails-idiomatic
 nested shape instead — `{ expense: { title: ..., amountCents: ... } }`, matching `form_for`/

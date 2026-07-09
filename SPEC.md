@@ -40,7 +40,13 @@ Ruby gem: composable `GraphQL::Schema::Argument`/`Field` derivation from ObjectT
 - Every `ConfigurationError`/`ArgumentError` message includes: offending identifier + available alternatives + corrective action — no bare "invalid" messages (V.43)
 - Zero-configuration defaults: `argument_namespace` → `:default`; `resource_arguments required:` → `true` — defaults explicit in docs (V.44)
 - `reset_for_reload!` must appear with a runnable example in docs, not just a mention — consumers must not need to read source to wire it correctly (V.45)
-- All public-API behavioral changes in `CHANGELOG.md` (Keep a Changelog) before merge; no silent breaking changes
+- All public-API behavioral changes in `CHANGELOG.md` before merge; no silent breaking changes
+- `CODE_OF_CONDUCT.md` present (Contributor Covenant) — standard for graphql-ecosystem gems (V.67)
+- Yardoc on all public API methods matching graphql-ruby style: `@param` `@return` `@raise` + runnable example where applicable (V.68)
+- `.yardopts` configured (V.68)
+- `.github/ISSUE_TEMPLATE/` with `bug_report.md` + `feature_request.md` (V.69)
+- `.github/PULL_REQUEST_TEMPLATE.md` (V.70)
+- Gemspec uses whitelist packaging (explicitly list `lib/` `LICENSE` `README.md` `docs/` `.yardopts`) — not git-ls-files blacklist; prevents review artifacts shipping (V.71, resolves B.10)
 - Language purity: no language B syntax embedded inside language A files — shell stays in `.sh`, XML in `.xml`, large data in `.yml`/`.json`; interpolation via `.erb`; applies to all file types in the repo (Ruby, YAML, Nix, etc.) (V.46)
 
 ---
@@ -147,6 +153,13 @@ V.63  Review artifacts (`REPORT.md`, root `SPEC.md`) excluded from gem package �
 V.64  Gemspec declares standard metadata URIs: `changelog_uri` `documentation_uri` `bug_tracker_uri` (B.11) (T.79)
 V.65  `check_known_candidate!` error includes corrective action hint — "Use pick.required/optional/fields :name to select it" alongside available names list (V.43 partial) (T.80)
 V.66  Ruby version matrix CI-ready — gemspec floor `>= 3.1`; CI currently pins 3.4 (nixpkgs); post-release matrix adds 3.x and eventually 4.x as community-driven (T.81)
+V.67  `CODE_OF_CONDUCT.md` present (Contributor Covenant) — standard for graphql-ecosystem gems; graphql-ruby, pundit, and peers all carry one (T.83)
+V.68  Yardoc on all public API methods: `@param` `@return` `@raise` + runnable example; `.yardopts` configured; matches graphql-ruby documentation standard (T.84)
+V.69  `.github/ISSUE_TEMPLATE/` with `bug_report.md` + `feature_request.md` — graphql-ruby, pundit both have these; reduces noise on the issue tracker (T.85)
+V.70  `.github/PULL_REQUEST_TEMPLATE.md` — keeps contribution quality consistent (T.86)
+V.71  Gemspec uses explicit whitelist packaging matching graphql-ruby's own (`lib/**/*` `LICENSE` `README.md` `docs/` `.yardopts`) — not git-ls-files blacklist; resolves B.10 (T.87)
+V.72  `Schema.use` registration decision documented — graphql-ruby plugin interface; either implement `Schema.use(GraphQL::Derivation::Rails)` as a wiring convenience, or explicitly document why `ControllerConcern` is the right surface instead (T.88)
+V.73  CHANGELOG format decision — graphql-ruby uses Breaking/Features/Bug fixes sections per version; we currently use Keep a Changelog; pick one and enforce it (T.89)
 
 ---
 
@@ -236,6 +249,13 @@ V.66  Ruby version matrix CI-ready — gemspec floor `>= 3.1`; CI currently pins
 | T.80 | .      | Add corrective action hint to `check_known_candidate!` error (V.65): "Use pick.required/optional/fields :name to include it" alongside the available names list |
 | T.81 | .      | Ruby version matrix (V.66): document community-driven support policy for Ruby 3.x+; gemspec floor stays `>= 3.1`; post-release CI matrix adds 3.x range; Ruby 4 tracked as future milestone, not a release blocker |
 | T.82 | .      | Scrub internal project/path references from `AGENTS.md`: `../oyster/.rubocop_standard.yml` path, `Oyster/*` custom cops mention, `Oyster's OSS release policy` — replace with generic descriptions; no internal project names in a public repo |
+| T.83 | .      | Add `CODE_OF_CONDUCT.md` (Contributor Covenant) — V.67; standard for graphql-ecosystem and pundit-ecosystem gems |
+| T.84 | .      | Add `.yardopts`; add `@param` `@return` `@raise` yardoc to all public API methods matching graphql-ruby documentation style — V.68 |
+| T.85 | .      | Add `.github/ISSUE_TEMPLATE/bug_report.md` + `feature_request.md` — V.69 |
+| T.86 | .      | Add `.github/PULL_REQUEST_TEMPLATE.md` — V.70 |
+| T.87 | .      | Switch gemspec to whitelist packaging: `lib/**/*` `LICENSE` `README.md` `docs/` `.yardopts` only — resolves B.10, V.71; mirrors graphql-ruby's own gemspec |
+| T.88 | .      | Document `Schema.use` registration decision (V.72): implement `Schema.use(GraphQL::Derivation::Rails)` as a wiring convenience for `resolve_all!` + `reset_for_reload!`, or document why `ControllerConcern` include is the correct interface |
+| T.89 | .      | CHANGELOG format decision (V.73): align with graphql-ruby (Breaking/Features/Bug fixes per version) or keep Keep a Changelog; document the choice in `AGENTS.md` |
 
 ---
 
@@ -289,3 +309,4 @@ V.66  Ruby version matrix CI-ready — gemspec floor `>= 3.1`; CI currently pins
 |-----|-----------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | P.1 | Merge Derivable twin modules      | `DerivableInputObject` + `DerivableObjectType` share ~70% logic (`included_classes`, `clear!`, `resolve_all!`, `resolve_derivation!`, cycle guard, collision check). A shared `Derivable` base mixin would DRY this. Tradeoff: adds abstraction layer + meta-programming; current duplication is explicit and readable. Defer until a third Derivable type appears or maintenance cost is felt. |
 | P.2 | Ruby 4 compatibility              | Gemspec floor `>= 3.1`; dev shell pins 3.4; post-release CI matrix covers 3.1 + 3.4 + latest 3.x. Ruby 4 is not a release blocker. Risks when it arrives: `did_you_mean` stdlib changes, `frozen_string_literal` behavior, graphql-ruby's own Ruby 4 support. No code changes needed now — no 3.x-specific syntax in use. Track via CI matrix addition once Ruby 4 is stable in nixpkgs. |
+| P.3 | `Schema.use` plugin interface     | graphql-ruby's standard plugin registration: `Schema.use(Plugin, **opts)`. Could wire `DerivableInputObject.resolve_all!` + `DerivableObjectType.resolve_all!` automatically on schema load, and hook `reset_for_reload!` into Rails reloader. Tradeoff: schema-level wiring vs. explicit `include ControllerConcern` which is already idiomatic Rails. Worth implementing if adoption outside Rails (standalone schema use) becomes a need. Decide alongside T.88. |

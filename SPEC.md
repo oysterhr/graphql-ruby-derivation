@@ -123,6 +123,11 @@ V.43  Every `ConfigurationError`/`ArgumentError` message includes offending iden
 V.44  Zero-configuration defaults explicit in docs: `argument_namespace` → `:default`; `resource_arguments required:` → `true` (T.56)
 V.45  `reset_for_reload!` documented with runnable example code — consumer must not need to read source to wire it (T.56)
 V.46  Language purity: no language B syntax embedded in language A files across the whole repo — shell in `.sh`, XML in `.xml`, large data in `.yml`/`.json`, interpolation via `.erb`; known violations: CI `run:` blocks, `flake.nix` shellHook, `lefthook.yml` run entries (T.59)
+V.47  Trust boundary documented: pick blocks + argument declarations are always developer-controlled; HTTP `params` values are user-controlled; the gem never executes user-supplied code (T.60)
+V.48  `to_unsafe_h` bypass of `ActionController::Parameters` is intentional and safe — `validate_input` + `coerce_input` are the actual validation gate; this assumption is documented in `USAGE.md` and `docs/SECURITY_HARDENING.md` (T.60)
+V.49  `class_exec(&block)` in `evaluate_resource_scope_block` receives only developer-authored blocks — never constructed from or influenced by user input; documented invariant (T.60)
+V.50  Dependabot configured for `Gemfile`/gemspec dependency updates (T.62)
+V.51  Trusted Publishing (Sigstore, `rubygems_mfa_required: true` already set) configured before first `gem push` (T.63)
 
 ---
 
@@ -189,6 +194,10 @@ V.46  Language purity: no language B syntax embedded in language A files across 
 | T.57 | .      | Extract `source_name` helper — duplicated verbatim in `ArgumentDerivation` + `FieldDerivation`; move to shared utility |
 | T.58 | .      | Extract `connection_type?` detection — duplicated in `ObjectTypeToArgument` + `ObjectTypeToField`; move to shared utility |
 | T.59 | .      | Language purity audit across all repo files (V.46): extract CI `run:` shell blocks to `.sh`, `flake.nix` shellHook to `.sh`, `lefthook.yml` run entries to `.sh`; audit Ruby + spec files for embedded non-Ruby syntax |
+| T.60 | .      | Write `docs/SECURITY_HARDENING.md`: threat model, trust boundary (V.47), `to_unsafe_h` rationale (V.48), `class_exec` assumption (V.49), known deliberate internals (`instance_variable_set`, `send(:allow_sibling_sources!)`) |
+| T.61 | .      | Add `to_unsafe_h` safety rationale to `USAGE.md` — consumers must understand why strong-params bypass is safe here |
+| T.62 | .      | Configure Dependabot for `Gemfile`/gemspec (V.50)                                                               |
+| T.63 | .      | Configure Trusted Publishing (Sigstore) on RubyGems.org before first `gem push` (V.51)                         |
 
 ---
 

@@ -37,6 +37,7 @@ Ruby gem: composable `GraphQL::Schema::Argument`/`Field` derivation from ObjectT
 - Zero-configuration defaults: `argument_namespace` → `:default`; `resource_arguments required:` → `true` — defaults explicit in docs (V.44)
 - `reset_for_reload!` must appear with a runnable example in docs, not just a mention — consumers must not need to read source to wire it correctly (V.45)
 - All public-API behavioral changes in `CHANGELOG.md` (Keep a Changelog) before merge; no silent breaking changes
+- Language purity: no language B syntax embedded inside language A files — shell stays in `.sh`, XML in `.xml`, large data in `.yml`/`.json`; interpolation via `.erb`; applies to all file types in the repo (Ruby, YAML, Nix, etc.) (V.46)
 
 ---
 
@@ -121,6 +122,7 @@ V.42  `ControllerConcern#arguments` hot path: memoized via `@arguments`; no re-r
 V.43  Every `ConfigurationError`/`ArgumentError` message includes offending identifier + available alternatives + corrective action hint — no bare "invalid" messages (T.55)
 V.44  Zero-configuration defaults explicit in docs: `argument_namespace` → `:default`; `resource_arguments required:` → `true` (T.56)
 V.45  `reset_for_reload!` documented with runnable example code — consumer must not need to read source to wire it (T.56)
+V.46  Language purity: no language B syntax embedded in language A files across the whole repo — shell in `.sh`, XML in `.xml`, large data in `.yml`/`.json`, interpolation via `.erb`; known violations: CI `run:` blocks, `flake.nix` shellHook, `lefthook.yml` run entries (T.59)
 
 ---
 
@@ -186,6 +188,7 @@ V.45  `reset_for_reload!` documented with runnable example code — consumer mus
 | T.56 | .      | Verify zero-config defaults (V.44) and `reset_for_reload!` runnable example (V.45) are in `docs/SPEC.md` + `USAGE.md` |
 | T.57 | .      | Extract `source_name` helper — duplicated verbatim in `ArgumentDerivation` + `FieldDerivation`; move to shared utility |
 | T.58 | .      | Extract `connection_type?` detection — duplicated in `ObjectTypeToArgument` + `ObjectTypeToField`; move to shared utility |
+| T.59 | .      | Language purity audit across all repo files (V.46): extract CI `run:` shell blocks to `.sh`, `flake.nix` shellHook to `.sh`, `lefthook.yml` run entries to `.sh`; audit Ruby + spec files for embedded non-Ruby syntax |
 
 ---
 

@@ -128,6 +128,14 @@ V.48  `to_unsafe_h` bypass of `ActionController::Parameters` is intentional and 
 V.49  `class_exec(&block)` in `evaluate_resource_scope_block` receives only developer-authored blocks — never constructed from or influenced by user input; documented invariant (T.60)
 V.50  Dependabot configured for `Gemfile`/gemspec dependency updates (T.62)
 V.51  Trusted Publishing (Sigstore, `rubygems_mfa_required: true` already set) configured before first `gem push` (T.63)
+V.52  Thread-safety scope documented: gem class-level registries are not protected by Mutex; concurrent class loading must happen before requests start (Zeitwerk eager load in production); limitation explicit in docs (T.68)
+V.53  `graphql_argument_input` override path tested — a controller subclass returning custom input exercises the full coercion pipeline with non-default input source (T.69)
+V.54  `argument_namespace` inheritance tested — subclass controller inherits namespace from superclass without redeclaring it (T.70)
+V.55  `resource_arguments` + `arguments_from` combo tested — resource scope with a derivation source (ObjectType or sibling) exercises both coercion paths together (T.71)
+V.56  camelCase wire format tested — HTTP params with camelCase keys (`amountCents`) coerce correctly to snake_case argument hash (`amount_cents`) via `deep_stringify_keys` path (T.72)
+V.57  `rake release` guarded — gemspec `allowed_push_host` set or `bundler/gem_tasks` removed until publish-ready; no accidental RubyGems push possible (T.73)
+V.58  `DerivationResolutionGuard.in_progress` reset between spec examples — `around` hook or equivalent ensures no state leaks across tests in random order (T.74)
+V.59  Rails 8 compatibility documented — gemspec `~> 7.0` pins noted; CI matrix or explicit compat note for Rails 8 upgrade path (T.75)
 
 ---
 
@@ -202,6 +210,14 @@ V.51  Trusted Publishing (Sigstore, `rubygems_mfa_required: true` already set) c
 | T.65 | .      | Vocabulary standardization (B.2–B.5): "inline" not "standalone"/"top-level" for declarations; "flat" for wire shape; differentiate "resolve" overloads in docs; "derivation source" canonical; timing language "class load time" vs "resolution time" |
 | T.66 | .      | Amend V.1: `MissingInputTypeError < ConfigurationError` is raised at request time by design — V.1 "ConfigurationError load-time only" is factually wrong; note the exception (B.6) |
 | T.67 | .      | Resolve B.7: decide whether to add `did_you_mean` to `check_known_candidate!` for field-name selection, or confirm available_names_list is the intended pattern and close V.7 as corrected |
+| T.68 | .      | Document thread-safety scope (V.52, B.8): add explicit note to `docs/SECURITY_HARDENING.md` + `USAGE.md` that class-level registries are not Mutex-protected; safe only when class loading completes before concurrent access begins |
+| T.69 | .      | Add spec for `graphql_argument_input` override — subclass overrides method, verify custom input flows through coercion (V.53) |
+| T.70 | .      | Add spec for `argument_namespace` inheritance — subclass controller inherits namespace from base class (V.54) |
+| T.71 | .      | Add spec for `resource_arguments` + `arguments_from` combo — resource scope with ObjectType derivation source (V.55) |
+| T.72 | .      | Add spec for camelCase wire format — params with camelCase keys coerce to snake_case hash via `deep_stringify_keys` path (V.56) |
+| T.73 | .      | Guard `rake release` (B.9, V.57): add `spec.metadata['allowed_push_host']` to gemspec or remove `bundler/gem_tasks` from Rakefile until RubyGems publish is intentional |
+| T.74 | .      | Add `around` reset for `DerivationResolutionGuard.in_progress` in `derivation_resolution_guard_spec.rb` — prevent state leak across examples in random order (V.58) |
+| T.75 | .      | Document Rails 8 compatibility (V.59): test against `~> 8.0` or add explicit note that Rails 8 is untested; `activesupport/actionpack ~> 7.0` pin is a known constraint |
 
 ---
 
@@ -241,6 +257,8 @@ V.51  Trusted Publishing (Sigstore, `rubygems_mfa_required: true` already set) c
 | B.5 | Timing language: "class load time", "load time", "at load time", "resolution time" mixed for the same events | Canonical: "class load time" for Ruby class body execution; "resolution time" for explicit `resolve_all!`/`resolve_derivation!` call — T.65 |
 | B.6 | V.1 states "ConfigurationError load-time only — never at request time" but `MissingInputTypeError < ConfigurationError` is raised at request time (`controller_concern.rb:433`); intentional (programming error surfaced on first action exercise) but V.1 is factually wrong as written | Amend V.1 to note the exception — T.66 |
 | B.7 | V.7 claimed `DidYouMean::SpellChecker` fires for unknown names in `required`/`optional`/`fields`; implementation applies it only to unknown override opts (`raise_unknown_override_opt_error`); unknown field names get `available_names_list` (all candidates) instead — V.7 overstated; T.7 was marked `x` prematurely | Corrected V.7 to match implementation; T.67 decides whether to extend did_you_mean or leave available_names_list as the pattern |
+| B.8 | Six class-level mutable structures have no `Mutex`: `DerivationResolutionGuard.@in_progress`, `DerivableInputObject/ObjectType.@included_classes`, `ArgumentSchema.@schemas`, `ActiveRecordMapper.@enum_cache`, `ControllerConcern.@own_action_input_objects`; concurrent class loading (Puma boot, Zeitwerk lazy autoload) is a real race window; no documentation of this limitation | Either add `Mutex` protection or explicitly document "not thread-safe during concurrent class loading" — T.68 |
+| B.9 | `Rakefile` includes `bundler/gem_tasks` (provides `rake release`); gemspec has no `allowed_push_host` guard; `rake release` would push to rubygems.org unconditionally if credentials present — accidental-publish risk while gem name is unfinalized | Add `spec.metadata['allowed_push_host']` guard or remove `bundler/gem_tasks` until publish-ready — T.73 |
 
 ---
 

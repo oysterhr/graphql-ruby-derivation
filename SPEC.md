@@ -85,7 +85,7 @@ V.3   `derive_from` at most once per class; second call raises `ConfigurationErr
 V.4   Zero-selection pick block raises `ConfigurationError` from `PickDsl::Base#validate!` (T.4)
 V.5   Same name in both `pick.required` and `pick.optional` raises `ConfigurationError`; same-bucket re-select is idempotent (T.5)
 V.6   `pick.override` on unselected name raises `ConfigurationError` (T.6)
-V.7   Unknown name in `required`/`optional`/`fields` raises `ConfigurationError` with `DidYouMean::SpellChecker` suggestion (T.7)
+V.7   Unknown name in `required`/`optional`/`fields` raises `ConfigurationError` with full candidate list; unknown override opt raises with `DidYouMean::SpellChecker` suggestion — did_you_mean scoped to override opts only (T.7)
 V.8   Connection-type fields (name ends `Connection` or includes `BaseConnection` ancestor) excluded from ObjectType candidates in both arg and field derivation (T.8)
 V.9   List-of-Object fields excluded from ObjectType argument candidates (T.9)
 V.10  Non-connection Object-type field selected as argument without `input_type:` override raises `ConfigurationError` (deferred from enumeration to build step) (T.10)
@@ -141,7 +141,7 @@ V.51  Trusted Publishing (Sigstore, `rubygems_mfa_required: true` already set) c
 | T.4  | x      | Zero-selection `ConfigurationError` in `PickDsl::Base#validate!`                                        |
 | T.5  | x      | Cross-bucket duplicate detection in `PickArguments#validate!`                                           |
 | T.6  | x      | `override`-on-unselected check in `PickDsl::Base#override`                                              |
-| T.7  | x      | Unknown-name `ConfigurationError` + `DidYouMean::SpellChecker` suggestion in `PickDsl::Base`            |
+| T.7  | ~      | Unknown-name `ConfigurationError` in `PickDsl::Base` — done for override opts (did_you_mean); field-name selection uses available_names_list, not did_you_mean; V.7 corrected (B.7), T.67 resolves |
 | T.8  | x      | Connection-type exclusion in `ObjectTypeToArgument` + `ObjectTypeToField` candidates                    |
 | T.9  | x      | List-of-Object exclusion in `ObjectTypeToArgument` candidates                                           |
 | T.10 | x      | `NestedObjectCandidate` deferred eligibility check in `ArgumentDerivation#build_argument`               |
@@ -201,6 +201,7 @@ V.51  Trusted Publishing (Sigstore, `rubygems_mfa_required: true` already set) c
 | T.64 | .      | Rename `ArgumentParsingError` → `ArgumentCoercionError` (B.1) — public API, pre-release window; update all references in lib/, spec/, docs/ |
 | T.65 | .      | Vocabulary standardization (B.2–B.5): "inline" not "standalone"/"top-level" for declarations; "flat" for wire shape; differentiate "resolve" overloads in docs; "derivation source" canonical; timing language "class load time" vs "resolution time" |
 | T.66 | .      | Amend V.1: `MissingInputTypeError < ConfigurationError` is raised at request time by design — V.1 "ConfigurationError load-time only" is factually wrong; note the exception (B.6) |
+| T.67 | .      | Resolve B.7: decide whether to add `did_you_mean` to `check_known_candidate!` for field-name selection, or confirm available_names_list is the intended pattern and close V.7 as corrected |
 
 ---
 
@@ -239,6 +240,7 @@ V.51  Trusted Publishing (Sigstore, `rubygems_mfa_required: true` already set) c
 | B.4 | "composable source" (§8.1 ControllerConcern) vs "derivation source" (§4/§5/§6/§7) — same concept, two names | Use "derivation source" everywhere; define "composable source" only if the composability aspect is specifically relevant — T.65 |
 | B.5 | Timing language: "class load time", "load time", "at load time", "resolution time" mixed for the same events | Canonical: "class load time" for Ruby class body execution; "resolution time" for explicit `resolve_all!`/`resolve_derivation!` call — T.65 |
 | B.6 | V.1 states "ConfigurationError load-time only — never at request time" but `MissingInputTypeError < ConfigurationError` is raised at request time (`controller_concern.rb:433`); intentional (programming error surfaced on first action exercise) but V.1 is factually wrong as written | Amend V.1 to note the exception — T.66 |
+| B.7 | V.7 claimed `DidYouMean::SpellChecker` fires for unknown names in `required`/`optional`/`fields`; implementation applies it only to unknown override opts (`raise_unknown_override_opt_error`); unknown field names get `available_names_list` (all candidates) instead — V.7 overstated; T.7 was marked `x` prematurely | Corrected V.7 to match implementation; T.67 decides whether to extend did_you_mean or leave available_names_list as the pattern |
 
 ---
 

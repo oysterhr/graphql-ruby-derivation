@@ -18,6 +18,10 @@ Ruby gem: composable `GraphQL::Schema::Argument`/`Field` derivation from ObjectT
 
 - `graphql >= 2.1, < 3.0` runtime dep; 2.1.x verified floor (CI matrix against real install, not stub)
 - `activesupport` `actionpack` `activerecord` dev deps only — optional; behind require guards; core loads without them; `>= 7.0, < 9.0` (Rails 7 + 8); community-driven support: gem does not gatekeep on minor/patch beyond the CI-verified floor (V.59)
+- Primary consumer (`anywhere`) pinned to `graphql ~> 2.3.23`, Rails `7.2.3.1` — these are the de-facto target versions; CI "current 2.x" job must cover 2.3.x (V.60)
+- `graphql-batch 0.5.3` coexists in `anywhere` — DataLoader batching is field-resolution-time; no interaction with `ControllerConcern` argument coercion; coexistence undocumented (V.61)
+- `inertia_graphql` is the primary integration point in `anywhere` — controllers include both `InertiaRails::ControllerHelpers` and `ControllerConcern`; this co-usage pattern is undocumented (V.62)
+- `graphql-rails_logger` — query execution logging, no interaction with argument derivation
 - Ruby >= 3.1 gemspec floor; dev shell pins `ruby_3_4` (nixpkgs; 3.1/3.2 removed from nixpkgs-unstable)
 - `# frozen_string_literal: true` on every file
 - Dev env via `flake.nix` + `direnv` only (no rbenv/asdf/system Ruby)
@@ -136,6 +140,9 @@ V.56  camelCase wire format tested — HTTP params with camelCase keys (`amountC
 V.57  `rake release` guarded — gemspec `allowed_push_host` set or `bundler/gem_tasks` removed until publish-ready; no accidental RubyGems push possible (T.73)
 V.58  `DerivationResolutionGuard.in_progress` reset between spec examples — `around` hook or equivalent ensures no state leaks across tests in random order (T.74)
 V.59  Rails 7 + 8 both supported — gemspec `activesupport/actionpack/activerecord >= 7.0, < 9.0` (current `~> 7.0` blocks Rails 8 installation); CI matrix covers both; community-driven: gem does not gatekeep on minor/patch; newer versions are best-effort until CI confirms (T.75)
+V.60  CI "current graphql 2.x" job covers graphql 2.3.x — primary consumer (`anywhere`) pinned to 2.3.23; `NullQueryContext` `#warden` path handles 2.1–2.3.x (already verified); upgrade to 2.4+ activates `#types` path automatically via existing dual-path impl (T.76)
+V.61  `graphql-batch` coexistence documented in `USAGE.md` — DataLoader batching is field-resolution-time; `ControllerConcern#arguments` coercion is request-param-time; no interaction between the two (T.77)
+V.62  `inertia_graphql` co-usage pattern documented in `USAGE.md` — primary `anywhere` pattern: controller includes both `InertiaRails::ControllerHelpers` and `ControllerConcern`; `arguments` available alongside Inertia rendering (T.77)
 
 ---
 
@@ -217,7 +224,9 @@ V.59  Rails 7 + 8 both supported — gemspec `activesupport/actionpack/activerec
 | T.72 | .      | Add spec for camelCase wire format — params with camelCase keys coerce to snake_case hash via `deep_stringify_keys` path (V.56) |
 | T.73 | .      | Guard `rake release` (B.9, V.57): add `spec.metadata['allowed_push_host']` to gemspec or remove `bundler/gem_tasks` from Rakefile until RubyGems publish is intentional |
 | T.74 | .      | Add `around` reset for `DerivationResolutionGuard.in_progress` in `derivation_resolution_guard_spec.rb` — prevent state leak across examples in random order (V.58) |
-| T.75 | .      | Broaden Rails support to 7 + 8 (V.59): change gemspec `~> 7.0` → `>= 7.0, < 9.0` for activesupport/actionpack/activerecord; add `gemfiles/rails_8.gemfile` to CI matrix; update `docs/SPEC.md` §1.2 + `USAGE.md`; community-driven — gem does not gatekeep on version beyond CI-verified floor |
+| T.75 | .      | Broaden Rails support to 7 + 8 (V.59): change gemspec `~> 7.0` → `>= 7.0, < 9.0` for activesupport/actionpack/activerecord; add `gemfiles/rails_8.gemfile` to CI matrix targeting Rails 7.2 (current `anywhere` version) + Rails 8; update `docs/SPEC.md` §1.2 + `USAGE.md` |
+| T.76 | .      | Verify CI "current graphql 2.x" job runs against >= 2.3.x (V.60) — `anywhere` is on 2.3.23; confirm gemfiles/graphql_2.1.gemfile floor + current Gemfile covers 2.3.x range; document `anywhere`'s pin in `docs/SPEC.md` §1.2 |
+| T.77 | .      | Document `graphql-batch` coexistence (V.61) and `inertia_graphql` co-usage pattern (V.62) in `USAGE.md` — these are the real `anywhere` integration patterns and the primary motivation for the gem |
 
 ---
 

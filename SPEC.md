@@ -143,6 +143,10 @@ V.59  Rails 7 + 8 both supported — gemspec `activesupport/actionpack/activerec
 V.60  CI "current graphql 2.x" job covers graphql 2.3.x — primary consumer (`anywhere`) pinned to 2.3.23; `NullQueryContext` `#warden` path handles 2.1–2.3.x (already verified); upgrade to 2.4+ activates `#types` path automatically via existing dual-path impl (T.76)
 V.61  `graphql-batch` coexistence documented in `USAGE.md` — DataLoader batching is field-resolution-time; `ControllerConcern#arguments` coercion is request-param-time; no interaction between the two (T.77)
 V.62  `inertia_graphql` co-usage pattern documented in `USAGE.md` — primary `anywhere` pattern: controller includes both `InertiaRails::ControllerHelpers` and `ControllerConcern`; `arguments` available alongside Inertia rendering (T.77)
+V.63  Review artifacts (`REPORT.md`, root `SPEC.md`) excluded from gem package — gemspec `files` reject filter updated (B.10) (T.78)
+V.64  Gemspec declares standard metadata URIs: `changelog_uri` `documentation_uri` `bug_tracker_uri` (B.11) (T.79)
+V.65  `check_known_candidate!` error includes corrective action hint — "Use pick.required/optional/fields :name to select it" alongside available names list (V.43 partial) (T.80)
+V.66  Ruby version matrix CI-ready — gemspec floor `>= 3.1`; CI currently pins 3.4 (nixpkgs); post-release matrix adds 3.x and eventually 4.x as community-driven (T.81)
 
 ---
 
@@ -227,6 +231,10 @@ V.62  `inertia_graphql` co-usage pattern documented in `USAGE.md` — primary `a
 | T.75 | .      | Broaden Rails support to 7 + 8 (V.59): change gemspec `~> 7.0` → `>= 7.0, < 9.0` for activesupport/actionpack/activerecord; add `gemfiles/rails_8.gemfile` to CI matrix targeting Rails 7.2 (current `anywhere` version) + Rails 8; update `docs/SPEC.md` §1.2 + `USAGE.md` |
 | T.76 | .      | Verify CI "current graphql 2.x" job runs against >= 2.3.x (V.60) — `anywhere` is on 2.3.23; confirm gemfiles/graphql_2.1.gemfile floor + current Gemfile covers 2.3.x range; document `anywhere`'s pin in `docs/SPEC.md` §1.2 |
 | T.77 | .      | Document `graphql-batch` coexistence (V.61) and `inertia_graphql` co-usage pattern (V.62) in `USAGE.md` — these are the real `anywhere` integration patterns and the primary motivation for the gem |
+| T.78 | .      | Exclude review + dev-env files from gem package (B.10, V.63): add `REPORT.md` `SPEC.md` `flake.nix` `flake.lock` `lefthook.yml` `gemfiles/` to gemspec `files` reject filter |
+| T.79 | .      | Add standard gemspec metadata (B.11, V.64): `changelog_uri` `documentation_uri` `bug_tracker_uri` |
+| T.80 | .      | Add corrective action hint to `check_known_candidate!` error (V.65): "Use pick.required/optional/fields :name to include it" alongside the available names list |
+| T.81 | .      | Ruby version matrix (V.66): document community-driven support policy for Ruby 3.x+; gemspec floor stays `>= 3.1`; post-release CI matrix adds 3.x range; Ruby 4 tracked as future milestone, not a release blocker |
 
 ---
 
@@ -268,6 +276,9 @@ V.62  `inertia_graphql` co-usage pattern documented in `USAGE.md` — primary `a
 | B.7 | V.7 claimed `DidYouMean::SpellChecker` fires for unknown names in `required`/`optional`/`fields`; implementation applies it only to unknown override opts (`raise_unknown_override_opt_error`); unknown field names get `available_names_list` (all candidates) instead — V.7 overstated; T.7 was marked `x` prematurely | Corrected V.7 to match implementation; T.67 decides whether to extend did_you_mean or leave available_names_list as the pattern |
 | B.8 | Six class-level mutable structures have no `Mutex`: `DerivationResolutionGuard.@in_progress`, `DerivableInputObject/ObjectType.@included_classes`, `ArgumentSchema.@schemas`, `ActiveRecordMapper.@enum_cache`, `ControllerConcern.@own_action_input_objects`; concurrent class loading (Puma boot, Zeitwerk lazy autoload) is a real race window; no documentation of this limitation | Either add `Mutex` protection or explicitly document "not thread-safe during concurrent class loading" — T.68 |
 | B.9 | `Rakefile` includes `bundler/gem_tasks` (provides `rake release`); gemspec has no `allowed_push_host` guard; `rake release` would push to rubygems.org unconditionally if credentials present — accidental-publish risk while gem name is unfinalized | Add `spec.metadata['allowed_push_host']` guard or remove `bundler/gem_tasks` until publish-ready — T.73 |
+| B.10 | `REPORT.md` + root `SPEC.md` (review artifacts) are tracked by git → `spec.files` via `git ls-files` includes them → review artifacts would ship to gem consumers on `gem push`; `flake.nix` `flake.lock` `lefthook.yml` `gemfiles/` also ship unnecessarily | Add review artifacts + dev-env files to gemspec `files` reject filter — T.78 |
+| B.11 | Gemspec missing standard RubyGems metadata: `changelog_uri` `documentation_uri` `bug_tracker_uri` — these populate rubygems.org gem page and are expected by standard tooling | Add to gemspec `spec.metadata` — T.79 |
+| B.12 | NOTICE file still declares `~> 7.0` for Rails deps; AGENTS.md rule: "update NOTICE in same PR as any gemspec dependency change"; T.75 broadens those constraints — NOTICE must update in the same PR | Update NOTICE when T.75 lands — T.75 dependency |
 
 ---
 

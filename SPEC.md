@@ -17,7 +17,7 @@ Ruby gem: composable `GraphQL::Schema::Argument`/`Field` derivation from ObjectT
 §C CONSTRAINTS
 
 - `graphql >= 2.1, < 3.0` runtime dep; 2.1.x verified floor (CI matrix against real install, not stub)
-- `activesupport` `actionpack` `activerecord` dev deps only — optional; behind require guards; core loads without them
+- `activesupport` `actionpack` `activerecord` dev deps only — optional; behind require guards; core loads without them; `>= 7.0, < 9.0` (Rails 7 + 8); community-driven support: gem does not gatekeep on minor/patch beyond the CI-verified floor (V.59)
 - Ruby >= 3.1 gemspec floor; dev shell pins `ruby_3_4` (nixpkgs; 3.1/3.2 removed from nixpkgs-unstable)
 - `# frozen_string_literal: true` on every file
 - Dev env via `flake.nix` + `direnv` only (no rbenv/asdf/system Ruby)
@@ -135,7 +135,7 @@ V.55  `resource_arguments` + `arguments_from` combo tested — resource scope wi
 V.56  camelCase wire format tested — HTTP params with camelCase keys (`amountCents`) coerce correctly to snake_case argument hash (`amount_cents`) via `deep_stringify_keys` path (T.72)
 V.57  `rake release` guarded — gemspec `allowed_push_host` set or `bundler/gem_tasks` removed until publish-ready; no accidental RubyGems push possible (T.73)
 V.58  `DerivationResolutionGuard.in_progress` reset between spec examples — `around` hook or equivalent ensures no state leaks across tests in random order (T.74)
-V.59  Rails 8 compatibility documented — gemspec `~> 7.0` pins noted; CI matrix or explicit compat note for Rails 8 upgrade path (T.75)
+V.59  Rails 7 + 8 both supported — gemspec `activesupport/actionpack/activerecord >= 7.0, < 9.0` (current `~> 7.0` blocks Rails 8 installation); CI matrix covers both; community-driven: gem does not gatekeep on minor/patch; newer versions are best-effort until CI confirms (T.75)
 
 ---
 
@@ -217,7 +217,7 @@ V.59  Rails 8 compatibility documented — gemspec `~> 7.0` pins noted; CI matri
 | T.72 | .      | Add spec for camelCase wire format — params with camelCase keys coerce to snake_case hash via `deep_stringify_keys` path (V.56) |
 | T.73 | .      | Guard `rake release` (B.9, V.57): add `spec.metadata['allowed_push_host']` to gemspec or remove `bundler/gem_tasks` from Rakefile until RubyGems publish is intentional |
 | T.74 | .      | Add `around` reset for `DerivationResolutionGuard.in_progress` in `derivation_resolution_guard_spec.rb` — prevent state leak across examples in random order (V.58) |
-| T.75 | .      | Document Rails 8 compatibility (V.59): test against `~> 8.0` or add explicit note that Rails 8 is untested; `activesupport/actionpack ~> 7.0` pin is a known constraint |
+| T.75 | .      | Broaden Rails support to 7 + 8 (V.59): change gemspec `~> 7.0` → `>= 7.0, < 9.0` for activesupport/actionpack/activerecord; add `gemfiles/rails_8.gemfile` to CI matrix; update `docs/SPEC.md` §1.2 + `USAGE.md`; community-driven — gem does not gatekeep on version beyond CI-verified floor |
 
 ---
 

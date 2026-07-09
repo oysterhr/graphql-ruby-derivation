@@ -1,8 +1,8 @@
 # Review Report — graphql-ruby-derivation
 
 **Branch:** `review/oss-spec-completion` · **Base:** `docs/oss-release-policy-compliance` (PR #28)
-**Reviewer:** Marcin Nowicki · **Date:** 2026-07-09
-**Purpose:** Independent peer review required by Oyster OSS release policy before making the repo public.
+**Date:** 2026-07-09
+**Purpose:** Independent peer review required by project OSS release policy before making the repo public.
 
 ---
 
@@ -14,7 +14,7 @@
 4. Security threat model + hardening assessment.
 5. Quality gate anchors added for coverage, complexity, language purity, performance, usability.
 
-`docs/SPEC.md` (Samuel's original spec) was **not modified** — preserved as reference.
+`docs/SPEC.md` (the original verbose spec) was **not modified** — preserved as reference.
 
 ---
 
@@ -139,13 +139,13 @@ Not confirmed or ruled out. The `one_of:` variant calls `context.types.arguments
 
 ### Q2 · ControllerConcern independent code review (T.47)
 
-Edwin's security review (PR #28) explicitly flagged the Rails ControllerConcern param-parsing layer as needing a second set of eyes with Rails Controller context. This is a blocking item for M.3 (Correctness sign-off). Not covered by this review — needs a separate reviewer.
+A prior security review (PR #28) explicitly flagged the Rails ControllerConcern param-parsing layer as needing a second set of eyes with Rails Controller context. This is a blocking item for M.3 (Correctness sign-off). Not covered by this review — needs a separate reviewer.
 
 ---
 
 ## Findings — docs/SPEC.md Gaps (tracked in §T T.36–T.45)
 
-These are documentation gaps in Samuel's spec, not code bugs. None are blockers for correctness; all should be fixed before calling the spec accurate.
+These are documentation gaps in the original spec, not code bugs. None are blockers for correctness; all should be fixed before calling the spec accurate.
 
 | Task | Gap |
 |------|-----|

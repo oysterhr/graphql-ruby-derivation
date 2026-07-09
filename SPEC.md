@@ -18,9 +18,9 @@ Ruby gem: composable `GraphQL::Schema::Argument`/`Field` derivation from ObjectT
 
 - `graphql >= 2.1, < 3.0` runtime dep; 2.1.x verified floor (CI matrix against real install, not stub)
 - `activesupport` `actionpack` `activerecord` dev deps only — optional; behind require guards; core loads without them; `>= 7.0, < 9.0` (Rails 7 + 8); community-driven support: gem does not gatekeep on minor/patch beyond the CI-verified floor (V.59)
-- Primary consumer (`anywhere`) pinned to `graphql ~> 2.3.23`, Rails `7.2.3.1` — these are the de-facto target versions; CI "current 2.x" job must cover 2.3.x (V.60)
-- `graphql-batch 0.5.3` coexists in `anywhere` — DataLoader batching is field-resolution-time; no interaction with `ControllerConcern` argument coercion; coexistence undocumented (V.61)
-- `inertia_graphql` is the primary integration point in `anywhere` — controllers include both `InertiaRails::ControllerHelpers` and `ControllerConcern`; this co-usage pattern is undocumented (V.62)
+- De-facto target versions: `graphql ~> 2.3.x`, Rails `7.2.x` — CI "current 2.x" job must cover 2.3.x (V.60)
+- `graphql-batch` is a known co-dependency — DataLoader batching is field-resolution-time; no interaction with `ControllerConcern` argument coercion; coexistence undocumented (V.61)
+- `inertia_graphql` is a known co-dependency — controllers may include both `InertiaRails::ControllerHelpers` and `ControllerConcern`; this co-usage pattern is undocumented (V.62)
 - `graphql-rails_logger` — query execution logging, no interaction with argument derivation
 - Ruby >= 3.1 gemspec floor; dev shell pins `ruby_3_4` (nixpkgs; 3.1/3.2 removed from nixpkgs-unstable)
 - `# frozen_string_literal: true` on every file
@@ -140,9 +140,9 @@ V.56  camelCase wire format tested — HTTP params with camelCase keys (`amountC
 V.57  `rake release` guarded — gemspec `allowed_push_host` set or `bundler/gem_tasks` removed until publish-ready; no accidental RubyGems push possible (T.73)
 V.58  `DerivationResolutionGuard.in_progress` reset between spec examples — `around` hook or equivalent ensures no state leaks across tests in random order (T.74)
 V.59  Rails 7 + 8 both supported — gemspec `activesupport/actionpack/activerecord >= 7.0, < 9.0` (current `~> 7.0` blocks Rails 8 installation); CI matrix covers both; community-driven: gem does not gatekeep on minor/patch; newer versions are best-effort until CI confirms (T.75)
-V.60  CI "current graphql 2.x" job covers graphql 2.3.x — primary consumer (`anywhere`) pinned to 2.3.23; `NullQueryContext` `#warden` path handles 2.1–2.3.x (already verified); upgrade to 2.4+ activates `#types` path automatically via existing dual-path impl (T.76)
+V.60  CI "current graphql 2.x" job covers graphql 2.3.x — primary consumer pinned to 2.3.23; `NullQueryContext` `#warden` path handles 2.1–2.3.x (already verified); upgrade to 2.4+ activates `#types` path automatically via existing dual-path impl (T.76)
 V.61  `graphql-batch` coexistence documented in `USAGE.md` — DataLoader batching is field-resolution-time; `ControllerConcern#arguments` coercion is request-param-time; no interaction between the two (T.77)
-V.62  `inertia_graphql` co-usage pattern documented in `USAGE.md` — primary `anywhere` pattern: controller includes both `InertiaRails::ControllerHelpers` and `ControllerConcern`; `arguments` available alongside Inertia rendering (T.77)
+V.62  `inertia_graphql` co-usage pattern documented in `USAGE.md` — known real-world pattern: controller includes both `InertiaRails::ControllerHelpers` and `ControllerConcern`; `arguments` available alongside Inertia rendering (T.77)
 V.63  Review artifacts (`REPORT.md`, root `SPEC.md`) excluded from gem package — gemspec `files` reject filter updated (B.10) (T.78)
 V.64  Gemspec declares standard metadata URIs: `changelog_uri` `documentation_uri` `bug_tracker_uri` (B.11) (T.79)
 V.65  `check_known_candidate!` error includes corrective action hint — "Use pick.required/optional/fields :name to select it" alongside available names list (V.43 partial) (T.80)
@@ -200,7 +200,7 @@ V.66  Ruby version matrix CI-ready — gemspec floor `>= 3.1`; CI currently pins
 | T.44 | .      | `docs/SPEC.md` §10.2: add `money_amount_type.rb` + `mutations/create_expense_mutation.rb` to fixture list |
 | T.45 | .      | `docs/SPEC.md` §11.1 + §11.4: close open questions (both resolved in implementation)                    |
 | T.46 | x      | `docs/SPEC.md` §1 + §10 status table: Specified → Implemented (commit 320f4d0)                          |
-| T.47 | .      | Independent code review of `ControllerConcern` param-parsing (Edwin's open item, PR #28)                |
+| T.47 | .      | Independent code review of `ControllerConcern` param-parsing (flagged in security review, PR #28)       |
 | T.48 | .      | Reserve RubyGems gem name before OSS flip                                                               |
 | T.49 | .      | Enable GitHub secret scanning + private vulnerability reporting on OSS flip                              |
 | T.50 | .      | Regenerate `USAGE.CAVEKIT.md` from `USAGE.md` once `docs/SPEC.md` gaps closed                          |
@@ -228,13 +228,14 @@ V.66  Ruby version matrix CI-ready — gemspec floor `>= 3.1`; CI currently pins
 | T.72 | .      | Add spec for camelCase wire format — params with camelCase keys coerce to snake_case hash via `deep_stringify_keys` path (V.56) |
 | T.73 | .      | Guard `rake release` (B.9, V.57): add `spec.metadata['allowed_push_host']` to gemspec or remove `bundler/gem_tasks` from Rakefile until RubyGems publish is intentional |
 | T.74 | .      | Add `around` reset for `DerivationResolutionGuard.in_progress` in `derivation_resolution_guard_spec.rb` — prevent state leak across examples in random order (V.58) |
-| T.75 | .      | Broaden Rails support to 7 + 8 (V.59): change gemspec `~> 7.0` → `>= 7.0, < 9.0` for activesupport/actionpack/activerecord; add `gemfiles/rails_8.gemfile` to CI matrix targeting Rails 7.2 (current `anywhere` version) + Rails 8; update `docs/SPEC.md` §1.2 + `USAGE.md` |
-| T.76 | .      | Verify CI "current graphql 2.x" job runs against >= 2.3.x (V.60) — `anywhere` is on 2.3.23; confirm gemfiles/graphql_2.1.gemfile floor + current Gemfile covers 2.3.x range; document `anywhere`'s pin in `docs/SPEC.md` §1.2 |
-| T.77 | .      | Document `graphql-batch` coexistence (V.61) and `inertia_graphql` co-usage pattern (V.62) in `USAGE.md` — these are the real `anywhere` integration patterns and the primary motivation for the gem |
+| T.75 | .      | Broaden Rails support to 7 + 8 (V.59): change gemspec `~> 7.0` → `>= 7.0, < 9.0` for activesupport/actionpack/activerecord; add `gemfiles/rails_8.gemfile` to CI matrix targeting Rails 7.2.x + Rails 8; update `docs/SPEC.md` §1.2 + `USAGE.md` |
+| T.76 | .      | Verify CI "current graphql 2.x" job runs against >= 2.3.x (V.60) — confirm gemfiles/graphql_2.1.gemfile floor + current Gemfile covers 2.3.x range; document target graphql version in `docs/SPEC.md` §1.2 |
+| T.77 | .      | Document `graphql-batch` coexistence (V.61) and `inertia_graphql` co-usage pattern (V.62) in `USAGE.md` — these are real-world integration patterns and a primary motivation for the gem |
 | T.78 | .      | Exclude review + dev-env files from gem package (B.10, V.63): add `REPORT.md` `SPEC.md` `flake.nix` `flake.lock` `lefthook.yml` `gemfiles/` to gemspec `files` reject filter |
 | T.79 | .      | Add standard gemspec metadata (B.11, V.64): `changelog_uri` `documentation_uri` `bug_tracker_uri` |
 | T.80 | .      | Add corrective action hint to `check_known_candidate!` error (V.65): "Use pick.required/optional/fields :name to include it" alongside the available names list |
 | T.81 | .      | Ruby version matrix (V.66): document community-driven support policy for Ruby 3.x+; gemspec floor stays `>= 3.1`; post-release CI matrix adds 3.x range; Ruby 4 tracked as future milestone, not a release blocker |
+| T.82 | .      | Scrub internal project/path references from `AGENTS.md`: `../oyster/.rubocop_standard.yml` path, `Oyster/*` custom cops mention, `Oyster's OSS release policy` — replace with generic descriptions; no internal project names in a public repo |
 
 ---
 

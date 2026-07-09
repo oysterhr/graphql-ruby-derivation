@@ -5,10 +5,12 @@ Ruby gem: composable `GraphQL::Schema::Argument`/`Field` derivation from ObjectT
 
 §M MILESTONES
 
-| ID  | Status | Milestone                                                                    |
-|-----|--------|------------------------------------------------------------------------------|
-| M.1 | x      | Core + Rails plugin + AR adapter implemented, CI green (317 examples)        |
-| M.2 | ~      | OSS release: public repo, independent review sign-off, RubyGems name reserved |
+| ID  | Status | Milestone                                                                                             |
+|-----|--------|-------------------------------------------------------------------------------------------------------|
+| M.1 | x      | Implementation complete: core + Rails plugin + AR adapter, CI green (317 examples)                    |
+| M.2 | .      | Spec complete: `ck:check` clean, impl + RSpec read, `docs/SPEC.md` gaps closed, no `?` in §V         |
+| M.3 | .      | Correctness sign-off: independent `ControllerConcern` review (T.47), all §V confirmed by 2nd human   |
+| M.4 | .      | OSS release: PR #28 merged, RubyGems name reserved (T.48), security features enabled (T.49), repo public |
 
 ---
 

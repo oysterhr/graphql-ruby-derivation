@@ -198,6 +198,8 @@ V.51  Trusted Publishing (Sigstore, `rubygems_mfa_required: true` already set) c
 | T.61 | .      | Add `to_unsafe_h` safety rationale to `USAGE.md` — consumers must understand why strong-params bypass is safe here |
 | T.62 | .      | Configure Dependabot for `Gemfile`/gemspec (V.50)                                                               |
 | T.63 | .      | Configure Trusted Publishing (Sigstore) on RubyGems.org before first `gem push` (V.51)                         |
+| T.64 | .      | Rename `ArgumentParsingError` → `ArgumentCoercionError` (B.1) — public API, pre-release window; update all references in lib/, spec/, docs/ |
+| T.65 | .      | Vocabulary standardization (B.2–B.5): "inline" not "standalone"/"top-level" for declarations; "flat" for wire shape; differentiate "resolve" overloads in docs; "derivation source" canonical; timing language "class load time" vs "resolution time" |
 
 ---
 
@@ -230,6 +232,11 @@ V.51  Trusted Publishing (Sigstore, `rubygems_mfa_required: true` already set) c
 
 | ID | Bug | Fix |
 |----|-----|-----|
+| B.1 | `ArgumentParsingError` names the operation "parsing"; every other use in code + docs calls it "coercion" (`coerce_input`, `coerce_request_arguments`, `ArgumentCoercionError` would be correct) — inconsistent public API name | Rename to `ArgumentCoercionError` before first release (pre-release window, breaking change acceptable now); add alias + deprecation warning if needed — T.64 |
+| B.2 | "inline", "standalone", "flat", "top-level" used interchangeably for non-derived `argument` declarations — no single canonical term | Standardize: "inline" for the declaration concept; "flat" for wire shape (vs "nested"); drop "standalone" and "top-level" for this concept — T.65 |
+| B.3 | `resolve` overloaded across 4 distinct operations: (a) engine execution (`FieldDerivation.resolve`), (b) class-level trigger (`resolve_all!`), (c) sibling lookup (`resolve_sibling_arguments`), (d) graphql-ruby field resolution — ambiguous in docs | Differentiate in docs/prose: "derive" or "run" for (a); "resolve" for (b); "look up" for (c); keep graphql-ruby's own "resolve" for (d) — T.65 |
+| B.4 | "composable source" (§8.1 ControllerConcern) vs "derivation source" (§4/§5/§6/§7) — same concept, two names | Use "derivation source" everywhere; define "composable source" only if the composability aspect is specifically relevant — T.65 |
+| B.5 | Timing language: "class load time", "load time", "at load time", "resolution time" mixed for the same events | Canonical: "class load time" for Ruby class body execution; "resolution time" for explicit `resolve_all!`/`resolve_derivation!` call — T.65 |
 
 ---
 

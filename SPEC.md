@@ -28,6 +28,15 @@ Ruby gem: composable `GraphQL::Schema::Argument`/`Field` derivation from ObjectT
 - Gem marked experimental until stable release; `summary`/`description` wording kept in sync
 - `main` branch-protected (GitHub); all changes via PR; Conventional Commits
 - RubyGems publish deferred (name not final); install from GitHub for now
+- Every `lib/` Ruby file has a 1-to-1 `spec/` counterpart — no orphan lib files (V.36)
+- SimpleCov: line + branch + method(?) coverage minimum 100%; CI fails below threshold (V.37 V.38 V.39)
+- RuboCop Metrics cops configured with explicit frozen limits (Sandi Metz style preferred: `ClassLength` 100, `MethodLength` 5, `ParameterLists` 4, `CyclomaticComplexity` 4); violations tracked in §D, never blanket-disabled (V.40)
+- Request path (`ControllerConcern#arguments`) does zero re-resolution and zero re-coercion per request — all hot-path work is memoized or deferred to load time (V.41 V.42)
+- `to_definition` / codegen path is not on the request path — rebuild cost is acceptable there
+- Every `ConfigurationError`/`ArgumentError` message includes: offending identifier + available alternatives + corrective action — no bare "invalid" messages (V.43)
+- Zero-configuration defaults: `argument_namespace` → `:default`; `resource_arguments required:` → `true` — defaults explicit in docs (V.44)
+- `reset_for_reload!` must appear with a runnable example in docs, not just a mention — consumers must not need to read source to wire it correctly (V.45)
+- All public-API behavioral changes in `CHANGELOG.md` (Keep a Changelog) before merge; no silent breaking changes
 
 ---
 
@@ -104,6 +113,16 @@ V.32  `eager_load_argument_sources!` raises `CyclicDependencyError` for sibling 
 V.33  `reset_for_reload!` clears: `DerivableInputObject.included_classes`, `DerivableObjectType.included_classes`, `ArgumentSchema` namespace cache, AR enum cache (T.33)
 V.34  `ArgumentSchema::NullQueryContext` compatible with graphql-ruby 2.1.x–2.x — exposes `#warden` (2.1–2.3) and `#types` (2.4+) without depending on `NullContext` singleton (T.34)
 V.35  `validates: required: { one_of: [...] }` override compatible with `NullWarden` — confirmed or limitation documented ? (T.35)
+V.36  Every `lib/graphql/derivation/**/*.rb` has a corresponding `spec/graphql/derivation/**/*_spec.rb` — 1-to-1, no orphan lib files (T.52)
+V.37  SimpleCov line coverage 100% enforced in CI (T.51)
+V.38  SimpleCov branch coverage 100% enforced in CI (T.51)
+V.39  SimpleCov method/? coverage 100% enforced in CI — third metric ? confirm (T.51)
+V.40  RuboCop Metrics cops (`ClassLength` `MethodLength` `ParameterLists` `CyclomaticComplexity` `PerceivedComplexity`) configured with frozen explicit limits; violations go to §D, never blanket-disabled (T.53)
+V.41  Derivation resolution fires exactly once per class — `@derivation_pick_block = nil` sentinel prevents re-evaluation; `resolve_derivation!` is idempotent (T.52)
+V.42  `ControllerConcern#arguments` hot path: memoized via `@arguments`; no re-resolution, no re-coercion per request (V.21)
+V.43  Every `ConfigurationError`/`ArgumentError` message includes offending identifier + available alternatives + corrective action hint — no bare "invalid" messages (T.55)
+V.44  Zero-configuration defaults explicit in docs: `argument_namespace` → `:default`; `resource_arguments required:` → `true` (T.56)
+V.45  `reset_for_reload!` documented with runnable example code — consumer must not need to read source to wire it (T.56)
 
 ---
 
@@ -161,6 +180,12 @@ V.35  `validates: required: { one_of: [...] }` override compatible with `NullWar
 | T.48 | .      | Reserve RubyGems gem name before OSS flip                                                               |
 | T.49 | .      | Enable GitHub secret scanning + private vulnerability reporting on OSS flip                              |
 | T.50 | .      | Regenerate `USAGE.CAVEKIT.md` from `USAGE.md` once `docs/SPEC.md` gaps closed                          |
+| T.51 | .      | Configure SimpleCov: enable branch coverage, minimum 100% line + branch + method(?); fail CI on miss   |
+| T.52 | .      | Audit 1-to-1 `lib/`↔`spec/` mapping; add missing spec files or capture gaps in §D                     |
+| T.53 | .      | Configure RuboCop Metrics cops with frozen limits (Sandi Metz preferred); capture current violations in §D |
+| T.54 | .      | Performance review: profile `ControllerConcern#arguments` under realistic load; verify no re-resolution on hot path |
+| T.55 | .      | Audit all `ConfigurationError`/`ArgumentError` messages: each must include offending identifier + available alternatives + corrective hint (V.43) |
+| T.56 | .      | Verify zero-config defaults (V.44) and `reset_for_reload!` runnable example (V.45) are in `docs/SPEC.md` + `USAGE.md` |
 
 ---
 

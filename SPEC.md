@@ -184,6 +184,8 @@ V.45  `reset_for_reload!` documented with runnable example code — consumer mus
 | T.54 | .      | Performance review: profile `ControllerConcern#arguments` under realistic load; verify no re-resolution on hot path |
 | T.55 | .      | Audit all `ConfigurationError`/`ArgumentError` messages: each must include offending identifier + available alternatives + corrective hint (V.43) |
 | T.56 | .      | Verify zero-config defaults (V.44) and `reset_for_reload!` runnable example (V.45) are in `docs/SPEC.md` + `USAGE.md` |
+| T.57 | .      | Extract `source_name` helper — duplicated verbatim in `ArgumentDerivation` + `FieldDerivation`; move to shared utility |
+| T.58 | .      | Extract `connection_type?` detection — duplicated in `ObjectTypeToArgument` + `ObjectTypeToField`; move to shared utility |
 
 ---
 
@@ -216,3 +218,11 @@ V.45  `reset_for_reload!` documented with runnable example code — consumer mus
 
 | ID | Bug | Fix |
 |----|-----|-----|
+
+---
+
+§P POTENTIAL
+
+| ID  | Idea                              | Description                                                                                                                                                                  |
+|-----|-----------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| P.1 | Merge Derivable twin modules      | `DerivableInputObject` + `DerivableObjectType` share ~70% logic (`included_classes`, `clear!`, `resolve_all!`, `resolve_derivation!`, cycle guard, collision check). A shared `Derivable` base mixin would DRY this. Tradeoff: adds abstraction layer + meta-programming; current duplication is explicit and readable. Defer until a third Derivable type appears or maintenance cost is felt. |

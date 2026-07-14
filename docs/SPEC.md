@@ -901,6 +901,10 @@ mappers are tested directly with the fixture classes as inputs.
 
 Each of the following must have isolated unit tests:
 
+- `PickDsl::Base`: candidate-set bookkeeping, `override` (unknown candidate, override before
+  selection, unknown override opt with `did_you_mean` suggestion), zero-selection guard in
+  `validate!` -- exercised directly via a minimal concrete subclass, not only indirectly through
+  `PickArguments`/`PickFields`
 - `PickArguments`: selection accumulation, validation (empty block, duplicate field, override
   on unselected field, unknown field name)
 - `PickFields`: same validations

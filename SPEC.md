@@ -256,6 +256,8 @@ V.73  CHANGELOG format decision — graphql-ruby uses Breaking/Features/Bug fixe
 | T.87 | .      | Switch gemspec to whitelist packaging: `lib/**/*` `LICENSE` `README.md` `docs/` `.yardopts` only — resolves B.10, V.71; mirrors graphql-ruby's own gemspec |
 | T.88 | .      | Document `Schema.use` registration decision (V.72): implement `Schema.use(GraphQL::Derivation::Rails)` as a wiring convenience for `resolve_all!` + `reset_for_reload!`, or document why `ControllerConcern` include is the correct interface |
 | T.89 | .      | CHANGELOG format decision (V.73): align with graphql-ruby (Breaking/Features/Bug fixes per version) or keep Keep a Changelog; document the choice in `AGENTS.md` |
+| T.90 | .      | Add CI status badge to `README.md` — standard OSS signal; GitHub Actions badge for the `CI` workflow on `main` |
+| T.91 | .      | Add `.editorconfig` at repo root — 2-space indent, LF, UTF-8; prevents tab/space noise from contributors using different editors |
 
 ---
 

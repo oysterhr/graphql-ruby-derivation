@@ -25,7 +25,7 @@ Ruby gem: composable `GraphQL::Schema::Argument`/`Field` derivation from ObjectT
 - Ruby >= 3.1 gemspec floor; dev shell pins `ruby_3_4` (nixpkgs; 3.1/3.2 removed from nixpkgs-unstable)
 - `# frozen_string_literal: true` on every file
 - Dev env via `flake.nix` + `direnv` only (no rbenv/asdf/system Ruby)
-- `ConfigurationError` load-time only; `ArgumentParsingError` request-time only — never crossed (V.1)
+- `ConfigurationError` load-time only; `ArgumentCoercionError` request-time only — never crossed (V.1)
 - `loads:` kwarg not supported in `ControllerConcern#argument` DSL
 - Symbol sibling sources disallowed in standalone `DerivableInputObject.derive_from` (V.30)
 - No auto-wiring into Rails reloader — consumer calls `reset_for_reload!` explicitly
@@ -77,7 +77,7 @@ errors:    `GraphQL::Derivation::Error` (base)
            `UnresolvableFieldError < ConfigurationError`
            `UnsupportedColumnTypeError < Error`
            `Rails::MissingInputTypeError < ConfigurationError` (action has no declared arguments)
-           `Rails::ArgumentParsingError < Error` (request-time coercion failure — NOT ConfigurationError)
+           `Rails::ArgumentCoercionError < Error` (request-time coercion failure — NOT ConfigurationError)
 
 sources (args):   `ObjectType < GraphQL::Schema::Object` | `InputObject < GraphQL::Schema::InputObject` | `Mutation < GraphQL::Schema::Mutation` | `Symbol` (sibling action; ControllerConcern only)
 sources (fields): `ObjectType < GraphQL::Schema::Object` | `ActiveRecord::Base` subclass (AR adapter required)
@@ -89,7 +89,7 @@ ar-excluded:  `id` `created_at` `updated_at`
 
 §V INVARIANTS
 
-V.1   `ConfigurationError` at class load time only; `ArgumentParsingError` at request time only — never swapped (T.1)
+V.1   `ConfigurationError` at class load time only; `ArgumentCoercionError` at request time only — never swapped (T.1)
 V.2   `CyclicDependencyError` for any `derive_from` cycle across DerivableInputObject and/or DerivableObjectType via shared `DerivationResolutionGuard` stack (T.2)
 V.3   `derive_from` at most once per class; second call raises `ConfigurationError` (T.3)
 V.4   Zero-selection pick block raises `ConfigurationError` from `PickDsl::Base#validate!` (T.4)
@@ -112,7 +112,7 @@ V.20  AR enum cached per `[model.name, column_name]` + `equal?` identity check �
 V.21  `ControllerConcern#arguments` memoized per request via `@arguments` ivar (T.21)
 V.22  Unknown top-level request params silently ignored — sliced to `input_object.arguments.keys` before coercion (T.22)
 V.23  `arguments` raises `MissingInputTypeError` when action has no registered InputObject (T.23)
-V.24  `arguments` raises `ArgumentParsingError` wrapping `GraphQL::ExecutionError` or `GraphQL::CoercionError` (T.24)
+V.24  `arguments` raises `ArgumentCoercionError` wrapping `GraphQL::ExecutionError` or `GraphQL::CoercionError` (T.24)
 V.25  `ArgumentSchema` one instance per namespace cached for process lifetime; `nil` → `:default` (T.25)
 V.26  `ArgumentSchema#to_definition` uses disposable fresh schema with real synthetic query root (not `extra_types`) — makes nested `resource_arguments` InputObjects reachable in SDL; rebuilt on every call (T.26)
 V.27  `ArgumentSchema#register_input_object` deduplicates by `graphql_name` not identity — reload-safe, stale entry replaced (T.27)
@@ -167,7 +167,7 @@ V.73  CHANGELOG format decision — graphql-ruby uses Breaking/Features/Bug fixe
 
 | ID   | Status | Task                                                                                                    |
 |------|--------|---------------------------------------------------------------------------------------------------------|
-| T.1  | x      | `ConfigurationError`/`ArgumentParsingError` separation — `errors.rb` + `rails/errors.rb`               |
+| T.1  | x      | `ConfigurationError`/`ArgumentCoercionError` separation — `errors.rb` + `rails/errors.rb`               |
 | T.2  | x      | Cross-mixin cycle detection via shared `DerivationResolutionGuard` stack                                |
 | T.3  | x      | `derive_from` at-most-once guard in `DerivableInputObject` + `DerivableObjectType`                     |
 | T.4  | x      | Zero-selection `ConfigurationError` in `PickDsl::Base#validate!`                                        |
@@ -190,7 +190,7 @@ V.73  CHANGELOG format decision — graphql-ruby uses Breaking/Features/Bug fixe
 | T.21 | x      | `@arguments` memoization in `ControllerConcern#arguments`                                               |
 | T.22 | x      | `raw_input.slice(*input_object.arguments.keys)` in `ControllerConcern#coerce_with_input_object`         |
 | T.23 | x      | `MissingInputTypeError` raise in `ControllerConcern#coerce_request_arguments`                           |
-| T.24 | x      | `ArgumentParsingError` wrapping `ExecutionError`/`CoercionError` in `ControllerConcern`                 |
+| T.24 | x      | `ArgumentCoercionError` wrapping `ExecutionError`/`CoercionError` in `ControllerConcern`                 |
 | T.25 | x      | `ArgumentSchema.for(namespace)` cache                                                                   |
 | T.26 | x      | Disposable `build_print_schema` with synthetic query root in `ArgumentSchema`                           |
 | T.27 | x      | `register_input_object` graphql_name-based dedup in `ArgumentSchema`                                    |
@@ -203,7 +203,7 @@ V.73  CHANGELOG format decision — graphql-ruby uses Breaking/Features/Bug fixe
 | T.34 | x      | `NullQueryContext` dual-path `#warden`/`#types` in `ArgumentSchema`                                     |
 | T.35 | .      | Confirm `validates: required: { one_of: [...] }` NullWarden compat or document limitation               |
 | T.36 | ~      | `docs/SPEC.md` §5.3: `method_defined?` → `respond_to?` (spec error — edit applied, commit pending)     |
-| T.37 | .      | `docs/SPEC.md` §2: add `Rails::MissingInputTypeError` + `Rails::ArgumentParsingError` to error hierarchy |
+| T.37 | .      | `docs/SPEC.md` §2: add `Rails::MissingInputTypeError` + `Rails::ArgumentCoercionError` to error hierarchy |
 | T.38 | .      | `docs/SPEC.md` §1.3: add `derivation_resolution_guard.rb` `pick_dsl/base.rb` `rails/errors.rb`          |
 | T.39 | .      | `docs/SPEC.md` §5.1: source validation fires at resolution time via DerivableObjectType, not declaration |
 | T.40 | .      | `docs/SPEC.md` §4.2 sibling source: NonNull stripped (not pure identity) — same as InputObject source   |
@@ -217,8 +217,8 @@ V.73  CHANGELOG format decision — graphql-ruby uses Breaking/Features/Bug fixe
 | T.48 | .      | Reserve RubyGems gem name before OSS flip                                                               |
 | T.49 | .      | Enable GitHub secret scanning + private vulnerability reporting on OSS flip                              |
 | T.50 | .      | Regenerate `USAGE.CAVEKIT.md` from `USAGE.md` once `docs/SPEC.md` gaps closed                          |
-| T.51 | .      | Configure SimpleCov: enable all available coverage types; set minimum 100% for each; fail CI on miss   |
-| T.52 | .      | Audit 1-to-1 `lib/`↔`spec/` mapping; add missing spec files or capture gaps in §D                     |
+| T.51 | ~      | Configure SimpleCov: enable all available coverage types; set minimum 100% for each; fail CI on miss — configured (line + branch, fails CI below threshold) with floor at today's measured baseline (99% line / 90% branch) per user decision; raising to 100% tracked separately |
+| T.52 | x      | Audit 1-to-1 `lib/`↔`spec/` mapping; add missing spec files or capture gaps in §D — added `pick_dsl/base_spec.rb`; remaining lib files without a dedicated spec (`rails/active_record.rb` require-shim, `rails/errors.rb` plain error-class defs covered indirectly via `controller_concern_spec.rb`, `version.rb` constant) don't warrant one |
 | T.53 | .      | Configure RuboCop Metrics cops with frozen limits (Sandi Metz preferred); capture current violations in §D |
 | T.54 | .      | Performance review: profile `ControllerConcern#arguments` under realistic load; verify no re-resolution on hot path |
 | T.55 | .      | Audit all `ConfigurationError`/`ArgumentError` messages: each must include offending identifier + available alternatives + corrective hint (V.43) |
@@ -230,7 +230,7 @@ V.73  CHANGELOG format decision — graphql-ruby uses Breaking/Features/Bug fixe
 | T.61 | .      | Add `to_unsafe_h` safety rationale to `USAGE.md` — consumers must understand why strong-params bypass is safe here |
 | T.62 | .      | Configure Dependabot for `Gemfile`/gemspec (V.50)                                                               |
 | T.63 | .      | Configure Trusted Publishing (Sigstore) on RubyGems.org before first `gem push` (V.51)                         |
-| T.64 | .      | Rename `ArgumentParsingError` → `ArgumentCoercionError` (B.1) — public API, pre-release window; update all references in lib/, spec/, docs/ |
+| T.64 | x      | Rename `ArgumentParsingError` → `ArgumentCoercionError` (B.1) — public API, pre-release window; update all references in lib/, spec/, docs/ |
 | T.65 | .      | Vocabulary standardization (B.2–B.5): "inline" not "standalone"/"top-level" for declarations; "flat" for wire shape; differentiate "resolve" overloads in docs; "derivation source" canonical; timing language "class load time" vs "resolution time" |
 | T.66 | .      | Amend V.1: `MissingInputTypeError < ConfigurationError` is raised at request time by design — V.1 "ConfigurationError load-time only" is factually wrong; note the exception (B.6) |
 | T.67 | .      | Resolve B.7: decide whether to add `did_you_mean` to `check_known_candidate!` for field-name selection, or confirm available_names_list is the intended pattern and close V.7 as corrected |

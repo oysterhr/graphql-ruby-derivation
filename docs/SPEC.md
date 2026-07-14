@@ -932,6 +932,20 @@ Each of the following must have isolated unit tests:
 The ActiveRecord mapper tests stub `Model.columns` and `Model.defined_enums` directly.
 No database connection is opened in the test suite.
 
+### 10.6 Coverage
+
+SimpleCov, configured in `spec/spec_helper.rb`, required first (before `require
+'graphql/derivation'`) so instrumentation covers gem load itself. Both line and branch coverage
+(`enable_coverage :branch`) are enabled. `minimum_coverage` fails the RSpec run (and therefore
+CI) if either type drops below its configured floor -- no separate CI step needed, SimpleCov's
+own `at_exit` hook handles it.
+
+The target is 100% for both types (line and branch); the floor is currently set to the measured
+baseline at the time SimpleCov was introduced (99% line / 90% branch) rather than 100%, since the
+gem predates coverage enforcement and had an existing gap (mostly single guard-clause branches
+across ~10 files) too large to close in the same change that introduced the tool. Raise the floor
+toward 100% incrementally as gaps close; never lower it.
+
 ---
 
 ## 11. Open Questions (Deferred to Implementation)

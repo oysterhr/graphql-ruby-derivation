@@ -630,7 +630,7 @@ always includes routing internals (`controller`, `action`) and every dynamic rou
 are declared as arguments. Before validating/coercing, the raw input is filtered to
 `raw_input.slice(*input_object.arguments.keys)` -- exactly Rails' own strong-parameters
 philosophy (`params.permit(...)` silently drops unpermitted keys rather than raising). Without
-this, `arguments` would raise `ArgumentParsingError` ("Field is not defined on ...Input") for
+this, `arguments` would raise `ArgumentCoercionError` ("Field is not defined on ...Input") for
 `controller`/`action`/every unused route segment on essentially every real request, since the
 gem's own validation (`InputObject#validate_input`) is strict about declared-only input. Fixture
 -based specs whose `params:` stub is a plain Hash with only the fields under test (no
@@ -640,7 +640,7 @@ real `ActionController::Parameters` from an actual request.
 Raises:
 - `GraphQL::Derivation::Rails::MissingInputTypeError` (subclass of `ConfigurationError`) if no
   `argument`, `arguments_from`, or `resource_arguments` was declared for this action.
-- `GraphQL::Derivation::Rails::ArgumentParsingError` if coercion fails (required argument absent,
+- `GraphQL::Derivation::Rails::ArgumentCoercionError` if coercion fails (required argument absent,
   type mismatch, enum value unrecognised). This is a hard error — no rescue inside the concern.
 
 #### `eager_load_argument_sources!`
@@ -919,7 +919,7 @@ Each of the following must have isolated unit tests:
   with inline argument raises
 - `DerivableObjectType`: verify derived fields appear; verify resolver handling end-to-end
 - `ControllerConcern`: stub ActionController::Base; verify `arguments` returns coerced hash;
-  verify `MissingInputTypeError`; verify `ArgumentParsingError`; verify `eager_load!` cycle
+  verify `MissingInputTypeError`; verify `ArgumentCoercionError`; verify `eager_load!` cycle
   detection
 - `ArgumentSchema`: verify one instance per namespace; verify extra type registration
 

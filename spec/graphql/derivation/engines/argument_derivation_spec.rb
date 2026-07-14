@@ -213,6 +213,21 @@ RSpec.describe GraphQL::Derivation::ArgumentDerivation do
           resolve(:create) { |pick| pick.optional(:title) }
         end.to raise_error(GraphQL::Derivation::ConfigurationError, /no sibling resolver/)
       end
+
+      it 're-lists a list-typed sibling argument after unwrapping its element type' do
+        list_resolver = Class.new do
+          define_method(:resolve_sibling_arguments) do |_name|
+            [GraphQL::Schema::Argument.new(:tags, [String], owner: nil, required: true)]
+          end
+        end.new
+
+        arguments = described_class.resolve(
+          :create, ->(pick) { pick.required(:tags) }, context: list_resolver,
+        )
+        tags = arguments.find { |argument| argument.graphql_name == 'tags' }
+
+        expect(tags.type).to have_attributes(list?: true, unwrap: GraphQL::Types::String)
+      end
     end
 
     context 'with an unsupported source type' do
@@ -245,6 +260,23 @@ RSpec.describe GraphQL::Derivation::ArgumentDerivation do
           resolve(anonymous_type) { |pick| pick.required(:bogus) }
         end.to raise_error(GraphQL::Derivation::ConfigurationError, /does not define it/)
       end
+    end
+  end
+
+  describe '#source_name (private)' do
+    # `enumerate_candidates` rejects any source that isn't an ObjectType,
+    # InputObject, Mutation, or Symbol before `source_name` is ever reached
+    # via `.resolve`, so every real source responds to `graphql_name`. This
+    # exercises the defensive `respond_to?(:graphql_name)` guard directly, for
+    # a source type `.resolve` could never actually pass it -- called via
+    # `send` since `source_name` is a `private_class_method`.
+    it 'falls back to #inspect for a source with no #name and no #graphql_name' do
+      fake_source = Object.new
+      def fake_source.name
+        nil
+      end
+
+      expect(described_class.send(:source_name, fake_source)).to eq(fake_source.inspect)
     end
   end
 end

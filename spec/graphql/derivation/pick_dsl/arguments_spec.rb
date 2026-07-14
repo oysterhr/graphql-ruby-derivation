@@ -167,6 +167,15 @@ RSpec.describe GraphQL::Derivation::PickDsl::PickArguments do
       )
     end
 
+    it 'uses plural phrasing when more than one field is both required and optional' do
+      pick.required(:name, :email)
+      pick.optional(:name, :email)
+
+      expect { pick.validate! }.to raise_error(
+        GraphQL::Derivation::ConfigurationError, /:email, :name were passed to both/,
+      )
+    end
+
     it 'does not raise when distinct fields are required and optional' do
       pick.required(:name)
       pick.optional(:email)

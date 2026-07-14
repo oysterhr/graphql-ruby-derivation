@@ -27,6 +27,17 @@ RSpec.describe GraphQL::Derivation::Mappers::InputObjectToArgument do
     it 'leaves an already-nullable source argument type unwrapped the same way' do
       expect(candidates[:description].type).not_to be_non_null
     end
+
+    it 're-lists a list-typed source argument after unwrapping its element type' do
+      list_input = Class.new(GraphQL::Schema::InputObject) do
+        graphql_name 'ListArgInput'
+        argument :tags, [String], required: true
+      end
+
+      list_candidates = described_class.candidates(list_input)
+
+      expect(list_candidates[:tags].type).to eq([GraphQL::Types::String])
+    end
   end
 
   describe '.candidates with a Mutation class source (SPEC.md §4.2 "Mutation source")' do

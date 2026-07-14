@@ -136,4 +136,24 @@ RSpec.describe GraphQL::Derivation::PickDsl::Base do
       expect { bare_pick.selections }.to raise_error(NotImplementedError)
     end
   end
+
+  describe 'subclass contract' do
+    subject(:bare_pick) { described_class.new(%i[name]) }
+
+    it 'requires selection_method_hint to be implemented' do
+      expect { bare_pick.send(:selection_method_hint) }.to raise_error(NotImplementedError)
+    end
+
+    it 'requires allowed_override_opts to be implemented' do
+      expect { bare_pick.send(:allowed_override_opts) }.to raise_error(NotImplementedError)
+    end
+
+    it 'requires selected? to be implemented' do
+      expect { bare_pick.send(:selected?, :name) }.to raise_error(NotImplementedError)
+    end
+
+    it 'requires selected_names to be implemented' do
+      expect { bare_pick.send(:selected_names) }.to raise_error(NotImplementedError)
+    end
+  end
 end

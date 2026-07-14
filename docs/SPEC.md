@@ -940,11 +940,13 @@ SimpleCov, configured in `spec/spec_helper.rb`, required first (before `require
 CI) if either type drops below its configured floor -- no separate CI step needed, SimpleCov's
 own `at_exit` hook handles it.
 
-The target is 100% for both types (line and branch); the floor is currently set to the measured
-baseline at the time SimpleCov was introduced (99% line / 90% branch) rather than 100%, since the
-gem predates coverage enforcement and had an existing gap (mostly single guard-clause branches
-across ~10 files) too large to close in the same change that introduced the tool. Raise the floor
-toward 100% incrementally as gaps close; never lower it.
+The target is 100% for both types (line and branch), and the initial gap (mostly single
+guard-clause branches across ~10 files) has been closed: branch coverage is at 100% on both CI
+matrix legs, and line coverage is 100% on the main `Gemfile`. The floor is `line: 99, branch: 100`
+rather than a flat `100`/`100`, because the `gemfiles/graphql_2.1.gemfile` matrix leg (SPEC.md
+§12.6) measures 99.88% line coverage: one line (`argument_schema_spec.rb`'s `visibility_profile`
+assertion) is only reachable by a spec that skips itself on graphql-ruby 2.1, so that line is
+structurally unreachable on that leg. Never lower the floor below what's actually measured.
 
 ---
 

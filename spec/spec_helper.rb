@@ -6,16 +6,14 @@ SimpleCov.start do
   enable_coverage :branch
   add_filter '/spec/'
 
-  # SPEC.md V.37 wants 100% for every coverage type; current baseline is
-  # ~99% line / ~90% branch (~10 files, mostly single guard-clause branches
-  # -- see SPEC.md T.51). Floor set just below today's measured numbers so
-  # CI enforces "no regression" without blocking on closing that gap; raise
-  # toward 100% as gaps close. Line floor has margin below the exact
-  # measured value (99.02%) because CI's graphql_2.1.gemfile matrix leg
-  # (SPEC.md §12.6) exercises one fewer line -- a `visibility_profile`
-  # pending spec that only runs against newer graphql-ruby -- landing at
-  # 98.89% on that leg.
-  minimum_coverage line: 98, branch: 90
+  # SPEC.md V.37 wants 100% for every coverage type (T.51). Branch coverage
+  # is at the full 100% on both CI matrix legs. Line coverage is 100% on the
+  # main Gemfile but 99.88% on the gemfiles/graphql_2.1.gemfile leg (SPEC.md
+  # §12.6): one line is only reachable by a `visibility_profile` pending
+  # spec that skips on graphql-ruby 2.1 (`argument_schema_spec.rb`). Line
+  # floor is set just below that leg's measured value rather than 100%, so
+  # CI still catches any real regression.
+  minimum_coverage line: 99, branch: 100
 end
 
 require 'graphql/derivation'

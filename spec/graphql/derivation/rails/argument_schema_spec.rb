@@ -27,6 +27,14 @@ RSpec.describe GraphQL::Derivation::Rails::ArgumentSchema do
     end
   end
 
+  describe '#to_definition with nothing registered' do
+    it 'falls back to super (printing the empty schema) instead of building a print schema' do
+      schema = described_class.for(:empty_namespace)
+
+      expect { schema.to_definition }.not_to raise_error
+    end
+  end
+
   describe 'extra type registration' do
     let(:input_object) do
       Class.new(GraphQL::Schema::InputObject) do

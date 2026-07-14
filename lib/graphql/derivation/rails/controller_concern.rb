@@ -465,7 +465,7 @@ module GraphQL
           # the flat/no-nesting case.
           coerced.to_h
         rescue GraphQL::ExecutionError, GraphQL::CoercionError => e
-          raise GraphQL::Derivation::Rails::ArgumentParsingError,
+          raise GraphQL::Derivation::Rails::ArgumentCoercionError,
             "Could not coerce arguments for #{action_name.inspect}: #{e.message}"
         end
 
@@ -473,7 +473,7 @@ module GraphQL
           validation = input_object.validate_input(raw_input, context)
           return if validation.valid?
 
-          raise GraphQL::Derivation::Rails::ArgumentParsingError,
+          raise GraphQL::Derivation::Rails::ArgumentCoercionError,
             "Could not coerce arguments for #{action_name.inspect}: #{validation.problems.inspect}"
         end
 

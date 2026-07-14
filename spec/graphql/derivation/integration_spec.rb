@@ -149,7 +149,7 @@ RSpec.describe 'Full-stack integration (AR -> DerivableObjectType -> ControllerC
   end
 
   describe 'failure path' do
-    it 'raises ArgumentParsingError when the required title argument is missing' do
+    it 'raises ArgumentCoercionError when the required title argument is missing' do
       object_type = build_object_type(expense_model)
       GraphQL::Derivation::DerivableObjectType.resolve_all!
 
@@ -159,7 +159,7 @@ RSpec.describe 'Full-stack integration (AR -> DerivableObjectType -> ControllerC
       )
 
       expect { instance.arguments }
-        .to raise_error(GraphQL::Derivation::Rails::ArgumentParsingError)
+        .to raise_error(GraphQL::Derivation::Rails::ArgumentCoercionError)
     end
   end
 end

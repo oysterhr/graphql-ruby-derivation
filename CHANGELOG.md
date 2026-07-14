@@ -12,9 +12,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   document contribution guidelines; a `CONTRIBUTING.md`, if applicable, should be included).
   Human-oriented; points to `AGENTS.md` for full process detail.
 
+### Changed
+
+- `GraphQL::Derivation::Rails::ArgumentParsingError` renamed to
+  `GraphQL::Derivation::Rails::ArgumentCoercionError` -- "parsing" misnamed the operation; every
+  other reference to it in code and docs already says "coercion" (`coerce_input`,
+  `coerce_request_arguments`). Breaking rename, made in the pre-release window before the gem has
+  any external consumers pinning the old name.
+
 ### Fixed
 
-- `ControllerConcern#arguments` no longer raises `ArgumentParsingError` ("Field is not defined")
+- `ControllerConcern#arguments` no longer raises `ArgumentCoercionError` ("Field is not defined")
   for Rails routing internals (`controller`, `action`) or any dynamic route segment not declared
   as an argument (e.g. `params[:engagement_id]` on a nested resource route). A real Rails
   `params` always includes these regardless of what an action declares; they are now filtered
@@ -129,7 +137,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   (`argument`, `arguments_from`, instance-level `arguments`, `argument_namespace`, and
   `eager_load_argument_sources!` with sibling-cycle detection) and per-namespace
   `GraphQL::Derivation::Rails::ArgumentSchema` (`.for(namespace)`), plus the
-  `MissingInputTypeError` (load-time) and `ArgumentParsingError` (request-time) errors (SPEC §8).
+  `MissingInputTypeError` (load-time) and `ArgumentCoercionError` (request-time) errors (SPEC §8).
   `activesupport` and `actionpack` (`~> 7.0`) are declared as optional development dependencies,
   consumed only through this require path (core stays Rails-free).
 - ActiveRecord adapter (`require 'graphql/derivation/rails/active_record'`):

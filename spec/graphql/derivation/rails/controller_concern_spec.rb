@@ -111,15 +111,15 @@ RSpec.describe GraphQL::Derivation::Rails::ControllerConcern do
         end
       end
 
-      it 'raises ArgumentParsingError when a required argument is absent' do
+      it 'raises ArgumentCoercionError when a required argument is absent' do
         instance = instance_for(controller, action: :create, params: {})
 
         expect { instance.arguments }
-          .to raise_error(GraphQL::Derivation::Rails::ArgumentParsingError)
+          .to raise_error(GraphQL::Derivation::Rails::ArgumentCoercionError)
       end
 
       it 'is not a ConfigurationError (request-time, not load-time, per SPEC.md §2)' do
-        expect(GraphQL::Derivation::Rails::ArgumentParsingError.ancestors)
+        expect(GraphQL::Derivation::Rails::ArgumentCoercionError.ancestors)
           .not_to include(GraphQL::Derivation::ConfigurationError)
       end
     end
@@ -151,18 +151,18 @@ RSpec.describe GraphQL::Derivation::Rails::ControllerConcern do
         expect(instance.arguments).to eq(page: 2, expense: {title: 'Lunch', amount_cents: 1200})
       end
 
-      it 'raises ArgumentParsingError when a required field inside the resource scope is missing' do
+      it 'raises ArgumentCoercionError when a required field inside the resource scope is missing' do
         instance = instance_for(
           controller, action: :create, params: {'expense' => {'title' => 'Lunch'}},
         )
 
-        expect { instance.arguments }.to raise_error(GraphQL::Derivation::Rails::ArgumentParsingError)
+        expect { instance.arguments }.to raise_error(GraphQL::Derivation::Rails::ArgumentCoercionError)
       end
 
-      it 'raises ArgumentParsingError when the resource key itself is absent (required: true default)' do
+      it 'raises ArgumentCoercionError when the resource key itself is absent (required: true default)' do
         instance = instance_for(controller, action: :create, params: {'page' => 2})
 
-        expect { instance.arguments }.to raise_error(GraphQL::Derivation::Rails::ArgumentParsingError)
+        expect { instance.arguments }.to raise_error(GraphQL::Derivation::Rails::ArgumentCoercionError)
       end
     end
 
@@ -183,7 +183,7 @@ RSpec.describe GraphQL::Derivation::Rails::ControllerConcern do
         end
       end
 
-      it 'ignores controller/action/route-segment keys instead of raising ArgumentParsingError' do
+      it 'ignores controller/action/route-segment keys instead of raising ArgumentCoercionError' do
         params = ActionController::Parameters.new(
           'controller' => 'team_members/time_offs',
           'action' => 'create',

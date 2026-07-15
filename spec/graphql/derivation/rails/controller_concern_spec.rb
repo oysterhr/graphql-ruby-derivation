@@ -219,6 +219,15 @@ RSpec.describe GraphQL::Derivation::Rails::ControllerConcern do
 
         expect(instance.arguments).to eq(time_off_request: {start_date: '2024-01-01'})
       end
+
+      it 'defines a matching time_off_request_params helper' do
+        params = ActionController::Parameters.new(
+          'timeOffRequest' => {'startDate' => '2024-01-01'},
+        )
+        instance = instance_for(controller, action: :create, params: params)
+
+        expect(instance.send(:time_off_request_params)).to eq(start_date: '2024-01-01')
+      end
     end
 
     context 'with required: false' do

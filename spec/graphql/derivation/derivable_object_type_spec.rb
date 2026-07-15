@@ -112,6 +112,22 @@ RSpec.describe GraphQL::Derivation::DerivableObjectType do
 
       expect(object_class.fields.keys).to contain_exactly('title')
     end
+
+    it 'uses plural phrasing when more than one inline field collides with a derived one' do
+      object_class = build_object_type_class do
+        derive_from FixtureSchema::ExpenseType do |pick|
+          pick.fields(:title, :amount_cents)
+        end
+
+        field :title, String, null: true
+        field :amount_cents, Integer, null: true
+      end
+
+      expect { object_class.resolve_derivation! }.to raise_error(
+        GraphQL::Derivation::ConfigurationError,
+        /already defines fields named amountCents, title inline.*derive fields with that name/im,
+      )
+    end
   end
 
   describe 'derive_from validation' do

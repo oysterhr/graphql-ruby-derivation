@@ -73,6 +73,19 @@ RSpec.describe GraphQL::Derivation::Rails::Adapters::ActiveRecordMapper do
       it 'does not raise for an unrelated unsupported column when it is not accessed' do
         expect { candidates }.not_to raise_error
       end
+
+      it 'raises UnsupportedColumnTypeError for an array column whose adapter exposes no #sql_type at all' do
+        no_sql_type_column = Struct.new(:name, :type, :null).new('legacy_tags', :array, true)
+        model = Class.new do
+          define_singleton_method(:columns) { [no_sql_type_column] }
+          define_singleton_method(:defined_enums) { {} }
+          define_singleton_method(:name) { 'NoSqlTypeModel' }
+        end
+
+        expect { described_class.candidates(model).fetch(:legacy_tags).type }.to raise_error(
+          GraphQL::Derivation::UnsupportedColumnTypeError, /legacy_tags/,
+        )
+      end
     end
 
     describe 'SPEC.md §9.2 Rails enum handling' do
@@ -86,6 +99,12 @@ RSpec.describe GraphQL::Derivation::Rails::Adapters::ActiveRecordMapper do
 
       it 'upcases and underscores the enum values' do
         expect(candidate_type(:category).values.keys).to contain_exactly('FOOD', 'TRAVEL', 'PAID_TIME_OFF')
+      end
+
+      it "memoizes a single Candidate's own #type across repeated calls" do
+        candidate = candidates.fetch(:category)
+
+        expect(candidate.type).to equal(candidate.type)
       end
 
       it 'memoizes the generated enum class across separate .candidates calls' do

@@ -123,6 +123,31 @@ RSpec.describe GraphQL::Derivation::Rails::ControllerConcern do
           .not_to include(GraphQL::Derivation::ConfigurationError)
       end
     end
+
+    context 'with input that passes validation but raises during coercion (e.g. a prepare: proc)' do
+      let(:controller) do
+        build_controller do
+          argument :quantity,
+            GraphQL::Types::Int,
+            required: true,
+            prepare: lambda { |value, _ctx|
+              raise GraphQL::ExecutionError, 'must be positive' if value <= 0
+
+              value
+            }
+          def create; end
+        end
+      end
+
+      it 'wraps the GraphQL::ExecutionError raised mid-coercion as ArgumentCoercionError' do
+        instance = instance_for(controller, action: :create, params: {'quantity' => -1})
+
+        expect { instance.arguments }.to raise_error(
+          GraphQL::Derivation::Rails::ArgumentCoercionError,
+          /Could not coerce arguments for "create": must be positive/,
+        )
+      end
+    end
   end
 
   describe '#arguments with resource_arguments (SPEC.md §8.1)' do
@@ -283,6 +308,24 @@ RSpec.describe GraphQL::Derivation::Rails::ControllerConcern do
     end
   end
 
+  describe '#arguments on a host with no #params method (SPEC.md §8.1 "controllers may override this")' do
+    it 'treats the request input as empty instead of raising' do
+      klass = Class.new do
+        include GraphQL::Derivation::Rails::ControllerConcern
+      end
+      klass.argument_namespace(:no_params_host)
+      klass.class_eval do
+        argument :nickname, String, required: false
+        def create; end
+        def action_name = 'create'
+      end
+
+      instance = klass.new
+
+      expect(instance.arguments).to eq({})
+    end
+  end
+
   describe 'class DSL validation' do
     it 'rejects loads: on an inline argument' do
       expect do
@@ -354,6 +397,47 @@ RSpec.describe GraphQL::Derivation::Rails::ControllerConcern do
       instance = instance_for(child, action: :update, params: {'title' => 'X'})
 
       expect(instance.arguments).to eq(title: 'X')
+    end
+  end
+
+  describe '.resolve_sibling_arguments' do
+    it 'raises ConfigurationError when the referenced sibling action is not registered' do
+      controller = build_controller do
+        arguments_from(:nonexistent) { |pick| pick.optional(:title) }
+        def create; end
+      end
+
+      expect { controller.resolve_sibling_arguments(:nonexistent) }.to raise_error(
+        GraphQL::Derivation::ConfigurationError,
+        /arguments_from references sibling action "nonexistent".*no such action is registered/m,
+      )
+    end
+  end
+
+  describe '.resolve_action_input_object!' do
+    it 'is a no-op for an action with no registered InputObject' do
+      controller = build_controller do
+        def create; end
+      end
+
+      expect { controller.resolve_action_input_object!(:create) }.not_to raise_error
+    end
+  end
+
+  describe 'argument_namespace inheritance' do
+    it 'falls back to :default when neither the class nor any ancestor called argument_namespace' do
+      klass = Class.new(ActionController::Base) do
+        include GraphQL::Derivation::Rails::ControllerConcern
+      end
+
+      expect(klass.resolved_argument_namespace).to eq(:default)
+    end
+
+    it 'inherits the ancestor-resolved namespace when a subclass never calls argument_namespace itself' do
+      base = build_controller(namespace: :inherited_namespace)
+      child = Class.new(base)
+
+      expect(child.resolved_argument_namespace).to eq(:inherited_namespace)
     end
   end
 

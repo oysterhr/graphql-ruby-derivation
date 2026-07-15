@@ -321,5 +321,35 @@ RSpec.describe 'derive_from resolution ordering + cycle detection' do
       expect(a.arguments.keys).to contain_exactly('title')
     end
   end
+
+  describe 'class_name (private) fallback for anonymous classes' do
+    it 'falls back to #inspect via the rescue when a cyclic class has no graphql_name declared' do
+      a = Class.new(GraphQL::Schema::InputObject) { include GraphQL::Derivation::DerivableInputObject }
+      b = Class.new(GraphQL::Schema::InputObject) { include GraphQL::Derivation::DerivableInputObject }
+      a.derive_from(b) { |pick| pick.required(:title) }
+      b.derive_from(a) { |pick| pick.required(:title) }
+
+      expect { a.resolve_derivation! }.to raise_error(
+        GraphQL::Derivation::CyclicDependencyError, /#<Class.*→.*#<Class.*→.*#<Class/,
+      )
+    end
+
+    # `class_name` is only ever called by `raise_cyclic_dependency_error` with
+    # actual `derive_from` source classes, which always respond to
+    # `graphql_name` (every GraphQL::Schema member does) -- this exercises
+    # the defensive `respond_to?(:graphql_name)` guard directly, for an
+    # input `class_name` could never actually receive, via `send` since it's
+    # a private method.
+    it 'falls back to #inspect for a class with no #name and no #graphql_name' do
+      fake_klass = Object.new
+      def fake_klass.name
+        nil
+      end
+
+      result = GraphQL::Derivation::DerivationResolutionGuard.send(:class_name, fake_klass)
+
+      expect(result).to eq(fake_klass.inspect)
+    end
+  end
 end
 # rubocop:enable RSpec/DescribeClass

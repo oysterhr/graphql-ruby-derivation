@@ -67,5 +67,11 @@ RSpec.describe GraphQL::Derivation::Rails do
 
       expect(GraphQL::Derivation::Rails::Adapters::ActiveRecordMapper.enum_cache).to be_empty
     end
+
+    it 'does not touch ActiveRecordMapper when the optional AR adapter was never required' do
+      hide_const('GraphQL::Derivation::Rails::Adapters::ActiveRecordMapper')
+
+      expect { described_class.reset_for_reload! }.not_to raise_error
+    end
   end
 end

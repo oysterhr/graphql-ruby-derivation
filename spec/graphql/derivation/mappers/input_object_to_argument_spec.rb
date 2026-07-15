@@ -28,15 +28,19 @@ RSpec.describe GraphQL::Derivation::Mappers::InputObjectToArgument do
       expect(candidates[:description].type).not_to be_non_null
     end
 
-    it 're-lists a list-typed source argument after unwrapping its element type' do
-      list_input = Class.new(GraphQL::Schema::InputObject) do
-        graphql_name 'ListArgInput'
-        argument :tags, [String], required: true
+    context 'with a list-typed source argument' do
+      let(:list_input) do
+        Class.new(GraphQL::Schema::InputObject) do
+          graphql_name 'ListArgInput'
+          argument :tags, [String], required: true
+        end
       end
 
-      list_candidates = described_class.candidates(list_input)
+      let(:list_candidates) { described_class.candidates(list_input) }
 
-      expect(list_candidates[:tags].type).to eq([GraphQL::Types::String])
+      it 're-lists it after unwrapping its element type' do
+        expect(list_candidates[:tags].type).to eq([GraphQL::Types::String])
+      end
     end
   end
 

@@ -7,6 +7,17 @@ RSpec.describe GraphQL::Derivation::FieldDerivation do
 
   describe '.resolve' do
     context 'with an ObjectType source' do
+      let(:wrapper) { double('wrapper', object: model) } # rubocop:disable RSpec/VerifiedDoubles
+      let(:model) { double('model', full_name: 'Jane Doe') } # rubocop:disable RSpec/VerifiedDoubles
+      let(:full_name_field) { fields_with_resolver_override.find { |field| field.graphql_name == 'fullName' } }
+      let(:fields_with_resolver_override) do
+        resolve(FixtureSchema::ExpenseType) do |pick|
+          pick.fields(:full_name)
+          pick.override(:full_name, resolver: resolver)
+        end
+      end
+      let(:resolver) { ->(obj, _args, _ctx) { obj.full_name } }
+
       it 'returns configured fields for the selected fields' do
         fields = resolve(FixtureSchema::ExpenseType) do |pick|
           pick.fields(:title, :amount_cents)
@@ -46,28 +57,10 @@ RSpec.describe GraphQL::Derivation::FieldDerivation do
       end
 
       it 'resolves a Case 3 field when the pick block supplies a resolver: override' do
-        resolver = ->(obj, _args, _ctx) { obj.full_name }
-
-        fields = resolve(FixtureSchema::ExpenseType) do |pick|
-          pick.fields(:full_name)
-          pick.override(:full_name, resolver: resolver)
-        end
-
-        expect(fields.map(&:graphql_name)).to include('fullName')
+        expect(fields_with_resolver_override.map(&:graphql_name)).to include('fullName')
       end
 
       it 'invokes the resolver: override proc, unwrapping the GraphQL object wrapper, when resolved' do
-        resolver = ->(obj, _args, _ctx) { obj.full_name }
-
-        fields = resolve(FixtureSchema::ExpenseType) do |pick|
-          pick.fields(:full_name)
-          pick.override(:full_name, resolver: resolver)
-        end
-        full_name_field = fields.find { |field| field.graphql_name == 'fullName' }
-
-        model = double('model', full_name: 'Jane Doe') # rubocop:disable RSpec/VerifiedDoubles
-        wrapper = double('wrapper', object: model) # rubocop:disable RSpec/VerifiedDoubles
-
         expect(full_name_field.resolve(wrapper, {}, nil)).to eq('Jane Doe')
       end
 
@@ -254,12 +247,15 @@ RSpec.describe GraphQL::Derivation::FieldDerivation do
     # defensive `respond_to?(:graphql_name)` guard directly, for a source
     # type `.resolve` could never actually pass it -- called via `send`
     # since `source_name` is a `private_class_method`.
-    it 'falls back to #inspect for a source with no #name and no #graphql_name' do
-      fake_source = Object.new
-      def fake_source.name
+    let(:fake_source) do
+      source = Object.new
+      def source.name
         nil
       end
+      source
+    end
 
+    it 'falls back to #inspect for a source with no #name and no #graphql_name' do
       expect(described_class.send(:source_name, fake_source)).to eq(fake_source.inspect)
     end
   end

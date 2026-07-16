@@ -182,6 +182,20 @@ RSpec.describe GraphQL::Derivation::ArgumentDerivation do
         end.new
       end
 
+      let(:tags) do
+        arguments = described_class.resolve(
+          :create, ->(pick) { pick.required(:tags) }, context: list_resolver,
+        )
+        arguments.find { |argument| argument.graphql_name == 'tags' }
+      end
+      let(:list_resolver) do
+        Class.new do
+          define_method(:resolve_sibling_arguments) do |_name|
+            [GraphQL::Schema::Argument.new(:tags, [String], owner: nil, required: true)]
+          end
+        end.new
+      end
+
       it 'resolves the named sibling action via the context resolver' do
         arguments = described_class.resolve(
           :create, ->(pick) { pick.required(:title) }, context: sibling_resolver,
@@ -215,17 +229,6 @@ RSpec.describe GraphQL::Derivation::ArgumentDerivation do
       end
 
       it 're-lists a list-typed sibling argument after unwrapping its element type' do
-        list_resolver = Class.new do
-          define_method(:resolve_sibling_arguments) do |_name|
-            [GraphQL::Schema::Argument.new(:tags, [String], owner: nil, required: true)]
-          end
-        end.new
-
-        arguments = described_class.resolve(
-          :create, ->(pick) { pick.required(:tags) }, context: list_resolver,
-        )
-        tags = arguments.find { |argument| argument.graphql_name == 'tags' }
-
         expect(tags.type).to have_attributes(list?: true, unwrap: GraphQL::Types::String)
       end
     end
@@ -270,12 +273,15 @@ RSpec.describe GraphQL::Derivation::ArgumentDerivation do
     # exercises the defensive `respond_to?(:graphql_name)` guard directly, for
     # a source type `.resolve` could never actually pass it -- called via
     # `send` since `source_name` is a `private_class_method`.
-    it 'falls back to #inspect for a source with no #name and no #graphql_name' do
-      fake_source = Object.new
-      def fake_source.name
+    let(:fake_source) do
+      source = Object.new
+      def source.name
         nil
       end
+      source
+    end
 
+    it 'falls back to #inspect for a source with no #name and no #graphql_name' do
       expect(described_class.send(:source_name, fake_source)).to eq(fake_source.inspect)
     end
   end

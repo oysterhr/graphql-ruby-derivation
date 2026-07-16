@@ -22,6 +22,16 @@ RSpec.describe GraphQL::Derivation::Rails::Adapters::ActiveRecordMapper do
 
   describe '.candidates' do
     describe 'SPEC.md §9.1 column type mapping' do
+      let(:no_sql_type_model) do
+        columns = [no_sql_type_column]
+        Class.new do
+          define_singleton_method(:columns) { columns }
+          define_singleton_method(:defined_enums) { {} }
+          define_singleton_method(:name) { 'NoSqlTypeModel' }
+        end
+      end
+      let(:no_sql_type_column) { Struct.new(:name, :type, :null).new('legacy_tags', :array, true) }
+
       it 'maps :string to String' do
         expect(candidate_type(:title)).to eq(String)
       end
@@ -75,14 +85,7 @@ RSpec.describe GraphQL::Derivation::Rails::Adapters::ActiveRecordMapper do
       end
 
       it 'raises UnsupportedColumnTypeError for an array column whose adapter exposes no #sql_type at all' do
-        no_sql_type_column = Struct.new(:name, :type, :null).new('legacy_tags', :array, true)
-        model = Class.new do
-          define_singleton_method(:columns) { [no_sql_type_column] }
-          define_singleton_method(:defined_enums) { {} }
-          define_singleton_method(:name) { 'NoSqlTypeModel' }
-        end
-
-        expect { described_class.candidates(model).fetch(:legacy_tags).type }.to raise_error(
+        expect { described_class.candidates(no_sql_type_model).fetch(:legacy_tags).type }.to raise_error(
           GraphQL::Derivation::UnsupportedColumnTypeError, /legacy_tags/,
         )
       end

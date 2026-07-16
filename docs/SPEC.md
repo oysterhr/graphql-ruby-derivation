@@ -630,7 +630,7 @@ always includes routing internals (`controller`, `action`) and every dynamic rou
 are declared as arguments. Before validating/coercing, the raw input is filtered to
 `raw_input.slice(*input_object.arguments.keys)` -- exactly Rails' own strong-parameters
 philosophy (`params.permit(...)` silently drops unpermitted keys rather than raising). Without
-this, `arguments` would raise `ArgumentParsingError` ("Field is not defined on ...Input") for
+this, `arguments` would raise `ArgumentCoercionError` ("Field is not defined on ...Input") for
 `controller`/`action`/every unused route segment on essentially every real request, since the
 gem's own validation (`InputObject#validate_input`) is strict about declared-only input. Fixture
 -based specs whose `params:` stub is a plain Hash with only the fields under test (no
@@ -640,7 +640,7 @@ real `ActionController::Parameters` from an actual request.
 Raises:
 - `GraphQL::Derivation::Rails::MissingInputTypeError` (subclass of `ConfigurationError`) if no
   `argument`, `arguments_from`, or `resource_arguments` was declared for this action.
-- `GraphQL::Derivation::Rails::ArgumentParsingError` if coercion fails (required argument absent,
+- `GraphQL::Derivation::Rails::ArgumentCoercionError` if coercion fails (required argument absent,
   type mismatch, enum value unrecognised). This is a hard error — no rescue inside the concern.
 
 #### `eager_load_argument_sources!`
@@ -901,6 +901,10 @@ mappers are tested directly with the fixture classes as inputs.
 
 Each of the following must have isolated unit tests:
 
+- `PickDsl::Base`: candidate-set bookkeeping, `override` (unknown candidate, override before
+  selection, unknown override opt with `did_you_mean` suggestion), zero-selection guard in
+  `validate!` -- exercised directly via a minimal concrete subclass, not only indirectly through
+  `PickArguments`/`PickFields`
 - `PickArguments`: selection accumulation, validation (empty block, duplicate field, override
   on unselected field, unknown field name)
 - `PickFields`: same validations
@@ -919,7 +923,7 @@ Each of the following must have isolated unit tests:
   with inline argument raises
 - `DerivableObjectType`: verify derived fields appear; verify resolver handling end-to-end
 - `ControllerConcern`: stub ActionController::Base; verify `arguments` returns coerced hash;
-  verify `MissingInputTypeError`; verify `ArgumentParsingError`; verify `eager_load!` cycle
+  verify `MissingInputTypeError`; verify `ArgumentCoercionError`; verify `eager_load!` cycle
   detection
 - `ArgumentSchema`: verify one instance per namespace; verify extra type registration
 
@@ -927,6 +931,22 @@ Each of the following must have isolated unit tests:
 
 The ActiveRecord mapper tests stub `Model.columns` and `Model.defined_enums` directly.
 No database connection is opened in the test suite.
+
+### 10.6 Coverage
+
+SimpleCov, configured in `spec/spec_helper.rb`, required first (before `require
+'graphql/derivation'`) so instrumentation covers gem load itself. Both line and branch coverage
+(`enable_coverage :branch`) are enabled. `minimum_coverage` fails the RSpec run (and therefore
+CI) if either type drops below its configured floor -- no separate CI step needed, SimpleCov's
+own `at_exit` hook handles it.
+
+The target is 100% for both types (line and branch), and the initial gap (mostly single
+guard-clause branches across ~10 files) has been closed: branch coverage is at 100% on both CI
+matrix legs, and line coverage is 100% on the main `Gemfile`. The floor is `line: 99, branch: 100`
+rather than a flat `100`/`100`, because the `gemfiles/graphql_2.1.gemfile` matrix leg (SPEC.md
+§12.6) measures 99.88% line coverage: one line (`argument_schema_spec.rb`'s `visibility_profile`
+assertion) is only reachable by a spec that skips itself on graphql-ruby 2.1, so that line is
+structurally unreachable on that leg. Never lower the floor below what's actually measured.
 
 ---
 

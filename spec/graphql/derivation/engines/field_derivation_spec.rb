@@ -56,6 +56,21 @@ RSpec.describe GraphQL::Derivation::FieldDerivation do
         expect(fields.map(&:graphql_name)).to include('fullName')
       end
 
+      it 'invokes the resolver: override proc, unwrapping the GraphQL object wrapper, when resolved' do
+        resolver = ->(obj, _args, _ctx) { obj.full_name }
+
+        fields = resolve(FixtureSchema::ExpenseType) do |pick|
+          pick.fields(:full_name)
+          pick.override(:full_name, resolver: resolver)
+        end
+        full_name_field = fields.find { |field| field.graphql_name == 'fullName' }
+
+        model = double('model', full_name: 'Jane Doe') # rubocop:disable RSpec/VerifiedDoubles
+        wrapper = double('wrapper', object: model) # rubocop:disable RSpec/VerifiedDoubles
+
+        expect(full_name_field.resolve(wrapper, {}, nil)).to eq('Jane Doe')
+      end
+
       it 'mixes Case 1, Case 2, and overridden Case 3 fields in one resolution' do
         fields = resolve(FixtureSchema::ExpenseType) do |pick|
           pick.fields(:title, :memo, :full_name)
@@ -229,6 +244,23 @@ RSpec.describe GraphQL::Derivation::FieldDerivation do
           resolve(anonymous_type) { |pick| pick.fields(:bogus) }
         end.to raise_error(GraphQL::Derivation::ConfigurationError, /does not define it/)
       end
+    end
+  end
+
+  describe '#source_name (private)' do
+    # `enumerate_candidates` rejects any source that isn't an ObjectType or
+    # ActiveRecord model before `source_name` is ever reached via `.resolve`,
+    # so every real source responds to `graphql_name`. This exercises the
+    # defensive `respond_to?(:graphql_name)` guard directly, for a source
+    # type `.resolve` could never actually pass it -- called via `send`
+    # since `source_name` is a `private_class_method`.
+    it 'falls back to #inspect for a source with no #name and no #graphql_name' do
+      fake_source = Object.new
+      def fake_source.name
+        nil
+      end
+
+      expect(described_class.send(:source_name, fake_source)).to eq(fake_source.inspect)
     end
   end
 end

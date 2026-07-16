@@ -14,9 +14,11 @@ from existing types, instead of hand-writing (and re-writing, and drifting) the 
 
 ## Install
 
+Not yet published to RubyGems — install directly from GitHub for now:
+
 ```ruby
 # Gemfile
-gem 'graphql-ruby-derivation'
+gem 'graphql-ruby-derivation', github: 'oysterhr/graphql-ruby-derivation'
 ```
 
 ```
@@ -67,8 +69,8 @@ bundle exec rubocop
 Git hooks (via [lefthook](https://github.com/evilmartians/lefthook)) run rubocop on commit and
 the full test suite on push.
 
-Contribution/process conventions (commit style, PR scope, how the spec and docs relate) live in
-[`AGENTS.md`](AGENTS.md).
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for how to propose a change. Full process conventions
+(commit style, PR scope, how the spec and docs relate) live in [`AGENTS.md`](AGENTS.md).
 
 ## License
 

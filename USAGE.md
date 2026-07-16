@@ -184,7 +184,7 @@ Passing an option outside these lists raises `ConfigurationError` immediately, w
 | `GraphQL::Derivation::UnresolvableFieldError` | A field resolves via a custom class-method resolver (Case 3, SPEC §5.3) and was selected without an explicit `method:`/`resolver:` override. |
 | `GraphQL::Derivation::UnsupportedColumnTypeError` | An ActiveRecord column type has no GraphQL mapping (e.g. `:jsonb`, unmappable `:array` element type). |
 | `GraphQL::Derivation::Rails::MissingInputTypeError` | `arguments` called from a controller action that never declared `argument`/`arguments_from`. |
-| `GraphQL::Derivation::Rails::ArgumentParsingError` | Request-time coercion failure (missing required arg, bad type, bad enum value) — the one error in this list that is **not** a `ConfigurationError`. |
+| `GraphQL::Derivation::Rails::ArgumentCoercionError` | Request-time coercion failure (missing required arg, bad type, bad enum value) — the one error in this list that is **not** a `ConfigurationError`. |
 
 ## Where to go next
 

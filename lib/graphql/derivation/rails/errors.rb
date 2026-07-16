@@ -18,7 +18,7 @@ module GraphQL
       # concern", raised at request time. Per the SPEC.md §2 philosophy
       # (ConfigurationError == load-time only), a request-time error must NOT
       # subclass ConfigurationError, so this descends from Error directly.
-      class ArgumentParsingError < GraphQL::Derivation::Error; end
+      class ArgumentCoercionError < GraphQL::Derivation::Error; end
     end
   end
 end

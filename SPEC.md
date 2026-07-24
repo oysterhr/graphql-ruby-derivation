@@ -10,7 +10,7 @@ Ruby gem: composable `GraphQL::Schema::Argument`/`Field` derivation from ObjectT
 | M.1 | x      | Implementation complete: core + Rails plugin + AR adapter, CI green (317 examples)                    |
 | M.2 | .      | Spec complete: `ck:check` clean, impl + RSpec read, `docs/SPEC.md` gaps closed, no `?` in §V         |
 | M.3 | .      | Correctness sign-off: independent `ControllerConcern` review (T.47), all §V confirmed by 2nd human   |
-| M.4 | .      | OSS release: PR #28 merged, RubyGems name reserved (T.48), security features enabled (T.49), repo public |
+| M.4 | .      | OSS release: PR #28 merged, RubyGems name reserved (T.48), disclosure policy recorded (T.49), repo public |
 
 ---
 
@@ -215,7 +215,7 @@ V.73  CHANGELOG format decision — graphql-ruby uses Breaking/Features/Bug fixe
 | T.46 | x      | `docs/SPEC.md` §1 + §10 status table: Specified → Implemented (commit 320f4d0)                          |
 | T.47 | .      | Independent code review of `ControllerConcern` param-parsing (flagged in security review, PR #28)       |
 | T.48 | .      | Reserve RubyGems gem name before OSS flip                                                               |
-| T.49 | .      | Enable GitHub secret scanning + private vulnerability reporting on OSS flip                              |
+| T.49 | x      | Enable GitHub secret scanning + private vulnerability reporting on OSS flip — superseded: the RDP is the single intake channel (PVR intentionally not used) and Aikido provides secret scanning org-wide (GitHub-native scanning + push protection intentionally not used); see AGENTS.md "Decisions on record" + `SECURITY.md` + `docs/SECURITY_HARDENING.md` |
 | T.50 | .      | Regenerate `USAGE.CAVEKIT.md` from `USAGE.md` once `docs/SPEC.md` gaps closed                          |
 | T.51 | x      | Configure SimpleCov: enable all available coverage types; set minimum 100% for each; fail CI on miss — configured (line + branch, fails CI below threshold); all identified gaps closed, branch coverage at 100% on both CI matrix legs, line coverage 100% on the main Gemfile / 99.88% on `gemfiles/graphql_2.1.gemfile` (one line only reachable by a pending spec that skips on graphql-ruby 2.1) |
 | T.52 | x      | Audit 1-to-1 `lib/`↔`spec/` mapping; add missing spec files or capture gaps in §D — added `pick_dsl/base_spec.rb`; remaining lib files without a dedicated spec (`rails/active_record.rb` require-shim, `rails/errors.rb` plain error-class defs covered indirectly via `controller_concern_spec.rb`, `version.rb` constant) don't warrant one |

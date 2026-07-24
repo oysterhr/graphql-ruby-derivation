@@ -25,8 +25,9 @@ This is a **library gem**, not an application. It has no network access, stores 
 |---|---|---|
 | CI token permissions | `permissions: contents: read` (least-privilege) | `.github/workflows/ci.yml` |
 | Third-party action supply chain | All actions pinned to commit SHAs | `.github/workflows/ci.yml` |
-| Vulnerability disclosure policy | Private reporting via GitHub + email | `SECURITY.md` |
+| Vulnerability disclosure policy | Oyster RDP submission form + `infosec@oysterhr.com`; safe-harbor per RDP terms | `SECURITY.md` |
 | Secret history scan | `gitleaks --log-opts="--all"` across all 69 commits — zero leaks | PR #28 |
+| Secret scanning (ongoing) | Aikido, org-wide security tooling | Aikido |
 | RubyGems MFA | `rubygems_mfa_required: true` | `graphql-ruby-derivation.gemspec` |
 | Branch protection | ≥1 review required on `main` | GitHub settings |
 | No personal names/internal refs | Stripped from public-facing files | PR #28 |
@@ -85,7 +86,6 @@ This is a **library gem**, not an application. It has no network access, stores 
 | Trusted Publishing (Sigstore) on RubyGems.org | T.63 | RubyGems name not final (T.48) |
 | `ControllerConcern` independent code review | T.47 | Needs human with Rails Controller context |
 | `to_unsafe_h` rationale in `USAGE.md` | T.61 | None |
-| GitHub secret scanning + private vuln reporting | T.49 | OSS flip (M.4) |
 
 ---
 
@@ -95,3 +95,5 @@ This is a **library gem**, not an application. It has no network access, stores 
 - Authentication / authorisation — not in scope for this gem
 - Content Security Policy, CSRF — application/Rails responsibility
 - Multi-tenant data isolation — application responsibility
+- GitHub private vulnerability reporting as an intake channel — the RDP is the single reporting funnel (`SECURITY.md`). GitHub Security Advisories remain available for *publishing* GHSA/CVE advisories at fix time, which is separate from intake and needs no PVR.
+- GitHub-native secret scanning + push protection — Aikido already provides secret scanning org-wide, so enabling GitHub's own is redundant and the ROI does not justify it.

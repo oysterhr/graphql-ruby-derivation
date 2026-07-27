@@ -50,15 +50,16 @@ Implemented / N/A per section). Whenever you start or finish implementing part o
   `infosec@oysterhr.com` as the disclosure contact, **not** the `developers@oysterhr.com` gemspec
   author alias above (that alias is a maintainer/authorship contact only); (b) link the RDP terms
   (https://legal.oysterhr.com/mpc-terms/rdp-terms); (c) state the RDP bounty scope
-  (`*.oysterhr.com`) and this repo's scope status; (d) treat the RDP as the single intake channel
+  (`*.oysterhr.com`) and this repo's Target status; (d) treat the RDP as the single intake channel
   and not use GitHub private vulnerability reporting (a competing, unmonitored inbound funnel).
   GitHub Security Advisories stay available for *publishing* GHSA/CVE advisories at fix time, which
   is separate from intake and needs no PVR. `SECURITY.md` is an authored policy file, not one of the three
   SPEC-derived docs below, so it is edited directly and must stay consistent with this decision.
-  **Open (pending Info Sec + Legal):** whether to bring this repo into the RDP's safe-harbor and
-  bounty scope, or keep it out of bounty scope and handle reports on a best-effort basis. Current
-  recommendation: extend safe harbor (authorization only, no bounty) and keep bounty scope limited
-  to `*.oysterhr.com`.
+  **Resolved (RDP Terms v2.0, 25 Jul 2026):** the Targets list stays `*.oysterhr.com`, so this repo
+  is not authorized for testing and has no safe harbor. The new "Reports Involving Non-Target
+  Systems" provision lets Oyster review and, at its sole discretion, reward a report about this repo
+  (or a dependency) that identifies a genuine risk, without granting authorization to test it.
+  `SECURITY.md`'s Scope section reflects this.
 - **CI:** GitHub Actions (`.github/workflows/ci.yml`), runs `bundle exec rspec` and
   `bundle exec rubocop` on push/PR.
 - **Lint:** rubocop + `rubocop-rspec` + `rubocop-performance`. Base ruleset mirrors

@@ -26,6 +26,8 @@ give us a reasonable amount of time to address the issue before any public discl
 
 Exploiting a vulnerability against Oyster's production surfaces (`*.oysterhr.com`) falls under the
 [Responsible Disclosure Program](https://www.oysterhr.com/trust/rdp-program), including its
-[safe-harbor and bounty terms](https://legal.oysterhr.com/mpc-terms/rdp-terms). This repository is not currently a named target of that program, so
-reports about the gem in isolation are handled on a best-effort, coordinated-disclosure basis and
-are not eligible for bounty awards.
+[safe-harbor and bounty terms](https://legal.oysterhr.com/mpc-terms/rdp-terms). This repository is
+not a listed Target of that program, so testing it is not authorized and carries no safe harbor.
+However, under the program's "Reports Involving Non-Target Systems" provision, Oyster may still
+review and, at its sole discretion, reward a report that identifies a genuine risk to Oyster.
+Report through the RDP as described above.

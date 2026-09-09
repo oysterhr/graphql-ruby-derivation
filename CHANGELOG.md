@@ -47,7 +47,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - `ControllerConcern#arguments` no longer raises `ArgumentCoercionError` ("Field is not defined")
   for Rails routing internals (`controller`, `action`) or any dynamic route segment not declared
-  as an argument (e.g. `params[:engagement_id]` on a nested resource route). A real Rails
+  as an argument (e.g. `params[:account_id]` on a nested resource route). A real Rails
   `params` always includes these regardless of what an action declares; they are now filtered
   out (`raw_input.slice(*input_object.arguments.keys)`) before validation/coercion, matching
   Rails' own strong-parameters philosophy of silently dropping unpermitted keys rather than

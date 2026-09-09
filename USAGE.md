@@ -83,29 +83,29 @@ type's GraphQL *name*, which the schema resolves to its own type of that name â€
 legacy type still mounted there. Small types reached only through one field are projected inline.
 
 ```ruby
-class TeamMembers::Types::TimeOffRequestType < TeamMembers::Types::BaseObject   # includes DerivableObjectType
-  derive_from TimeOff::Contracts::TimeOffRequestType do |pick|
+class Mobile::Types::ExpenseType < Mobile::Types::BaseObject   # includes DerivableObjectType
+  derive_from Billing::Contracts::ExpenseType do |pick|
     pick.fields :id, :start_date, :end_date, :state,
-      :engagement,                            # edge: resolves to this schema's `Engagement`
+      :account,                            # edge: resolves to this schema's `Account`
       file: %i[url content_type filename]     # nested: inline projection of the field's own type
   end
 end
 
-class TeamMembers::Schema < GraphQL::Schema
+class Mobile::Schema < GraphQL::Schema
   extend GraphQL::Derivation::ProjectionSchema      # actionable boot errors (below)
 
-  orphan_types(*TeamMembers::Types.projections)     # every projection is part of the schema
-  query TeamMembers::Types::QueryType
+  orphan_types(*Mobile::Types.projections)     # every projection is part of the schema
+  query Mobile::Types::QueryType
 end
 ```
 
-If the schema has no type named `Engagement`, defining it raises `MissingProjectionError`:
+If the schema has no type named `Account`, defining it raises `MissingProjectionError`:
 
 ```
-TeamMembers::Schema has no type named "Engagement", but TimeOffRequest.engagement needs one:
-it is derived from TimeOff::Contracts::TimeOffRequestType#engagement, which returns Contracts::EngagementType.
-Either add a projection of Contracts::EngagementType named "Engagement" to TeamMembers::Schema (...),
-or ... `pick.override(:engagement, type: SomeType)`, or ... `pick.expose_full(:engagement)`.
+Mobile::Schema has no type named "Account", but Expense.account needs one:
+it is derived from Billing::Contracts::ExpenseType#account, which returns Contracts::AccountType.
+Either add a projection of Contracts::AccountType named "Account" to Mobile::Schema (...),
+or ... `pick.override(:account, type: SomeType)`, or ... `pick.expose_full(:account)`.
 ```
 
 Enums and scalars are copied as-is (they have no edges). Instance resolver methods on the source

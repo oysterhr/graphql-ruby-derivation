@@ -599,11 +599,11 @@ optional: it only moves every derivation error to one place.
 that mounts projections (§5.5).
 
 ```ruby
-class TeamMembers::Schema < GraphQL::Schema
+class Mobile::Schema < GraphQL::Schema
   extend GraphQL::Derivation::ProjectionSchema
 
-  orphan_types(*TeamMembers::Types.projections)   # host-side: every projection in the surface
-  query TeamMembers::Types::QueryType
+  orphan_types(*Mobile::Types.projections)   # host-side: every projection in the surface
+  query Mobile::Types::QueryType
 end
 ```
 
@@ -612,7 +612,7 @@ are explicit and actionable:
 
 - A `ProjectedEdge` that finds no type of its name in this schema: graphql-ruby's
   `UnresolvedLateBoundTypeError` is re-raised as `MissingProjectionError`, naming the derived
-  field (`TimeOffRequest.engagement`), the source field (`TimeOff::Contracts::TimeOffRequestType#engagement`),
+  field (`Expense.account`), the source field (`Billing::Contracts::ExpenseType#account`),
   the type it returns, and the three ways out (add a projection reachable from a root field or
   `orphan_types`; `pick.override(name, type: T)`; `pick.expose_full(name)`). Unrelated late-bound
   failures are re-raised untouched.
@@ -750,7 +750,7 @@ InputObjects into plain Hashes; `to_kwargs` does not) is cached in an instance v
 
 **Unknown top-level keys are silently ignored, not a validation error.** A real Rails `params`
 always includes routing internals (`controller`, `action`) and every dynamic route segment
-(e.g. `params[:engagement_id]` for a nested resource route), regardless of whether any of them
+(e.g. `params[:account_id]` for a nested resource route), regardless of whether any of them
 are declared as arguments. Before validating/coercing, the raw input is filtered to
 `raw_input.slice(*input_object.arguments.keys)` -- exactly Rails' own strong-parameters
 philosophy (`params.permit(...)` silently drops unpermitted keys rather than raising). Without

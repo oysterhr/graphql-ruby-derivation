@@ -135,6 +135,8 @@ module GraphQL
     ConfigurationError     = Class.new(Error)   # programming errors; raised at class load time
     CyclicDependencyError  = Class.new(ConfigurationError)
     UnresolvableFieldError = Class.new(ConfigurationError)
+    MissingProjectionError = Class.new(ConfigurationError)   # §7.4
+    DuplicateTypeNameError = Class.new(ConfigurationError)   # §7.4
     UnsupportedColumnTypeError = Class.new(Error)
   end
 end
@@ -148,6 +150,10 @@ full cycle path (e.g. `create → update → create`).
 
 **UnresolvableFieldError** is raised when field derivation encounters a field whose resolver
 cannot be transferred to the destination type without an explicit override.
+
+**MissingProjectionError** and **DuplicateTypeNameError** are raised by `ProjectionSchema` (§7.4)
+while a schema is being defined: the first when a derived edge (§5.5) finds no type of its name in
+the schema, the second when two distinct classes are registered under one GraphQL name.
 
 **UnsupportedColumnTypeError** is raised by the ActiveRecord adapter when a column type has no
 GraphQL primitive mapping.
@@ -197,9 +203,23 @@ Valid override opts: `description:`, `default_value:`, `prepare:`, `validates:`,
 
 Used by `FieldDerivation`. Methods:
 
-**`pick.fields(*field_names)`**
+**`pick.fields(*field_names, **nested)`**
 Selects the named fields from the candidate set. Raises `ConfigurationError` at evaluation time
 if any name is not in the candidate set. May be called multiple times; selections accumulate.
+Keyword arguments are shorthand for `project`: `pick.fields :id, file: %i[url filename]` is
+`pick.fields(:id)` plus `pick.project(:file) { |file| file.fields(:url, :filename) }`.
+
+**`pick.project(field_name) { |nested| ... }`**
+Selects `field_name`, which must return an Object type, and declares an inline projection of that
+type (§5.5): the copied field returns a new anonymous `DerivableObjectType` deriving from the
+field's own return type, under the same GraphQL name, picking what the nested block says. The
+nested block receives a `PickFields` and follows the same rules, recursively. Raises
+`ConfigurationError` without a block, for an unknown name, or when the field's type is not an
+Object type (interface, union, or an already late-bound edge).
+
+**`pick.expose_full(*field_names)`**
+Selects the named edge fields and copies them with their source return type unchanged
+(`pick.fields(name)` plus `pick.override(name, expose_full: true)`). Greppable on purpose.
 
 **`pick.override(field_name, **opts)`**
 Applies the given options to an already-selected field. Raises `ConfigurationError` if
@@ -207,7 +227,8 @@ Applies the given options to an already-selected field. Raises `ConfigurationErr
 
 Valid override opts: `description:`, `deprecation_reason:`, `null:`, `method:`, `resolver:`,
 `name:` (emits the field under a different name on the destination type),
-`camelize:` (default true, matches graphql-ruby default).
+`camelize:` (default true, matches graphql-ruby default), `type:` (the copied field returns
+exactly this type, keeping the source's List/NonNull wrapping; §5.5), `expose_full:` (§5.5).
 
 **Validation at evaluation time:**
 - At least one field must be selected. An empty block raises `ConfigurationError`.
@@ -327,8 +348,11 @@ Any other source raises `ArgumentError` at declaration time.
 ### 5.2 Candidate Enumeration
 
 **ObjectType source:**
-`source.fields.values` — all fields, including inherited. Connections are excluded from
-candidates (same rule as §4.2).
+`source.fields.values` — all fields, including inherited. Relay connection fields are excluded
+from candidates: a connection type is one with `GraphQL::Types::Relay::BaseConnection` among its
+ancestors. Unlike §4.2, the type *name* is not consulted: a plain Object type may legitimately be
+called `...Connection` (an integration "connection" record) and a field returning it stays
+derivable.
 
 **ActiveRecord source:**
 `source.columns` — all columns reported by `ActiveRecord::Base.columns`. Virtual attributes,
@@ -337,7 +361,8 @@ selected. Type mapping is performed by the ActiveRecord adapter (§9).
 
 ### 5.3 Resolver Handling (ObjectType source)
 
-When copying a field from a source ObjectType, three cases arise:
+When copying a field from a source ObjectType, four cases arise. Case 4 is checked first, because
+graphql-ruby itself asks the type instance for a resolver method before looking at `method:`.
 
 **Case 1 — Default method resolver:** The field has no `resolver_method:` override and no
 `resolver:` proc. graphql-ruby resolves it by calling a method of the same name on the
@@ -360,12 +385,26 @@ pick.override :full_name, resolver: ->(obj, args, ctx) { obj.first_name + " " + 
 pick.override :full_name, method: :computed_full_name
 ```
 
-The engine detects Case 3 by checking whether `source.method_defined?("resolve_#{field_name}")`.
+The engine detects Case 3 by checking whether `source.respond_to?("resolve_#{field_name}")`.
+
+**Case 4 — Instance resolver method on source class:** The source ObjectType (or a module it
+includes) defines an instance method named after the field's `resolver_method` (by default the
+field name): `def submitted_on; object.created_at.to_date; end`. graphql-ruby calls such a method
+on the *type instance* before it ever looks at the underlying object, so a plain copy would skip
+it and silently resolve against the object instead (or raise at query time). The engine attaches
+`GraphQL::Derivation::SourceResolverExtension` to the copied field; at query time the extension
+swaps in an instance of the source type (built with `authorized_new`), so the source's method
+runs with the same `object`, `context` and dataloader. A `method:` or `resolver:` override in the
+pick block replaces this. Methods every `GraphQL::Schema::Object` instance already has do not
+count as Case 4.
+
+Detection: `source.method_defined?(field.resolver_method) &&
+!GraphQL::Schema::Object.method_defined?(field.resolver_method)`.
 
 ### 5.4 Resolution Algorithm
 
 ```
-def resolve(source, pick_block)
+def resolve(source, pick_block, destination: nil)
   candidates = enumerate_candidates(source)
   pick = PickFields.new(candidates.keys)
   pick_block.call(pick)
@@ -374,10 +413,57 @@ def resolve(source, pick_block)
   pick.selections.map do |name, overrides|
     candidate = candidates[name]
     check_resolver!(source, candidate, name, overrides)  # raises UnresolvableFieldError if Case 3
-    build_field(name, candidate.type, **merge_opts(candidate, overrides))
+    type = derived_type(candidate, overrides, pick.projections[name], destination)  # §5.5
+    field = destination.field_class.new(name:, type:, owner: destination, **merge_opts(candidate, overrides))
+    copy_definition!(field, candidate)      # arguments, extras, custom extensions
+    attach_source_resolver!(field, candidate) if Case 4 and no method:/resolver: override
+    field
   end
 end
 ```
+
+`merge_opts` carries forward, from the source field, `description:`, `deprecation_reason:`,
+`connection:` and `scope:` (both of which graphql-ruby otherwise guesses from the *shape* of the
+type expression, which a built type object no longer has), and Case 2's `method:`. The pick
+block's overrides win. `copy_definition!` re-adds the source field's arguments, extras and custom
+extensions (graphql-ruby's own `ConnectionExtension`/`ScopeExtension` are recreated by the copy's
+settings and not copied). The field is built with the destination's `field_class` and owned by
+the destination, so host-app field subclasses apply and `field.path` names the derived type.
+
+### 5.5 Edge Types (Projections)
+
+A derived type that lives in a *different schema* from its source ("a projection") must not pull
+the source's neighbours in through its edges. `derived_type` therefore rewrites the innermost
+type of a copied field, keeping the source's List/NonNull wrapping. First match wins:
+
+| Source field returns | Override / pick | Copied field returns |
+|---|---|---|
+| anything | `pick.override name, type: T` | `T` |
+| Object type | `pick.project name { ... }` | a new anonymous `DerivableObjectType` deriving from the source field's type, named after it (§3.3) |
+| Object/Interface/Union | `pick.expose_full name` | the source type, unchanged |
+| Object/Interface/Union | (nothing) | `GraphQL::Derivation::ProjectedEdge` — a `GraphQL::Schema::LateBoundType` carrying the source type's `graphql_name` |
+| Enum, scalar, other leaf | (nothing) | the source type, unchanged |
+| already a `LateBoundType` (source is itself a projection) | (nothing) | unchanged |
+
+`ProjectedEdge` is resolved by graphql-ruby itself, by GraphQL name, when the derived type is
+added to a schema (`Schema::Addition#add_type_and_traverse`, i.e. at schema definition time). The
+schema's own type of that name wins, whatever class it is: a projection, a legacy type, or the
+canonical type mounted as-is. There is no per-field type override to repeat and no
+canonical-to-projection registry to maintain. graphql-ruby marks `LateBoundType` `@api private`
+(it is what `Schema.from_definition` uses); its behaviour is pinned by this gem's specs.
+
+Consequences: (1) the GraphQL type name is the contract between a projection and its edges, so
+projections keep the canonical name (graphql-ruby's default `graphql_name` for
+`Surface::Types::XType` is `X`); (2) a type reached *only* through late-bound edges is unknown to
+the schema until something registers it concretely — list projections in `orphan_types`;
+(3) once resolved, graphql-ruby replaces the field's type with the concrete class, so a projection
+class belongs to one schema.
+
+Nested projections (`pick.project`) are based on the destination's superclass (so they share its
+`field_class` and behaviour), include `DerivableObjectType` if the base does not already, copy the
+source type's `description`, and register in `DerivableObjectType.included_classes`.
+`pick.project` on a nested field whose type is itself a projection (late-bound) raises
+`ConfigurationError`: it has no concrete type to derive from.
 
 ---
 
@@ -479,9 +565,16 @@ end
 ### 7.2 Behaviour
 
 - `derive_from` may be called at most once per class. A second call raises `ConfigurationError`.
-- The derivation is stored unevaluated. Resolution fires when the owning schema is first loaded
-  (via `lazy_resolve_derivations!`).
-- Resolved fields are registered on the ObjectType class via `field` as if declared inline.
+- The derivation is stored unevaluated. Resolution is lazy: it fires the first time anything reads
+  the class's fields — graphql-ruby traversing a schema (`all_field_definitions`), query or
+  introspection (`fields`, `get_field`), or an explicit `resolve_derivation!`/`resolve_all!`. No
+  call order is required for derived fields to be present in a schema.
+- A derivation that fails to resolve stays pending and raises again on every later read. A schema
+  can therefore never silently observe the type without its derived fields.
+- Subclasses of a class that included the mixin are registered in `included_classes` too (the
+  usual host shape: `include` once in a base type, `derive_from` in each concrete type).
+- Resolved fields are registered on the ObjectType class via `add_field` as if declared inline,
+  built with the class's `field_class` and owned by it (§5.4).
 - Inline `field` declarations may coexist with `derive_from`. If an inline `field` names a
   field also produced by the derivation, `ConfigurationError` is raised at resolution time.
 - Same recursive-resolution and cycle-detection guarantee as §6.2: if the `derive_from` source is
@@ -497,7 +590,38 @@ load or explicitly by the schema author.
 **Rails dev-environment note:** same guidance as §6.3 -- in dev/test with class reloading
 enabled, drive this from `Rails.application.reloader.to_prepare { ... }`, not a one-shot
 initializer, so re-resolution happens after every reload as well as at boot. In production
-(no reloading), a one-shot initializer-style call is fine.
+(no reloading), a one-shot initializer-style call is fine. With lazy resolution (§7.2) the call is
+optional: it only moves every derivation error to one place.
+
+### 7.4 `ProjectionSchema`
+
+**Module:** `GraphQL::Derivation::ProjectionSchema` — `extend` onto a `GraphQL::Schema` subclass
+that mounts projections (§5.5).
+
+```ruby
+class TeamMembers::Schema < GraphQL::Schema
+  extend GraphQL::Derivation::ProjectionSchema
+
+  orphan_types(*TeamMembers::Types.projections)   # host-side: every projection in the surface
+  query TeamMembers::Types::QueryType
+end
+```
+
+It adds nothing at query time. It wraps `add_type_and_traverse` so two definition-time failures
+are explicit and actionable:
+
+- A `ProjectedEdge` that finds no type of its name in this schema: graphql-ruby's
+  `UnresolvedLateBoundTypeError` is re-raised as `MissingProjectionError`, naming the derived
+  field (`TimeOffRequest.engagement`), the source field (`TimeOff::Contracts::TimeOffRequestType#engagement`),
+  the type it returns, and the three ways out (add a projection reachable from a root field or
+  `orphan_types`; `pick.override(name, type: T)`; `pick.expose_full(name)`). Unrelated late-bound
+  failures are re-raised untouched.
+- Two distinct classes registered under one GraphQL name: `DuplicateTypeNameError`, raised as soon
+  as the second one is added, listing each class with the fields that return it. graphql-ruby
+  alone keeps both and raises `DuplicateNamesError` only when something asks for the type.
+
+Both are `ConfigurationError`s and fire when the schema class is defined (graphql-ruby traverses
+`query(...)` eagerly unless `GraphQL::Schema::Visibility` is in use).
 
 ---
 

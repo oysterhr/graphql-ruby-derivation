@@ -4,6 +4,7 @@ require 'graphql'
 require_relative 'expense_status_enum'
 require_relative 'address_type'
 require_relative 'money_amount_type'
+require_relative 'sync_connection_type'
 
 module FixtureSchema
   # Primary fixture ObjectType for Argument Derivation Engine (§4) and Field
@@ -23,6 +24,11 @@ module FixtureSchema
   #       Case 1 (default method resolver): `title`
   #       Case 2 (`method:` option):        `memo` -> `internal_memo`
   #       Case 3 (custom class resolver):   `full_name` -> `self.resolve_full_name`
+  #       Case 4 (instance resolver method): `display_title` -> `def display_title`,
+  #                                          `notes(limit:)` -> `def notes(limit:)` (with an argument)
+  #   - A plain Object field whose type is merely *named* `...Connection`
+  #     (`sync_connection`), declared `connection: false` -- must stay a
+  #     Field Derivation candidate and keep `connection: false` when copied.
   class ExpenseType < GraphQL::Schema::Object
     # --- Scalars (§4.3 type mapping table) ---
     field :id, GraphQL::Types::ID, null: false
@@ -56,5 +62,23 @@ module FixtureSchema
     def self.resolve_full_name(obj, _args, _ctx)
       obj.full_name
     end
+
+    # --- Resolver Case 4: instance resolver methods on the type ---
+    field :display_title, String, null: true
+
+    def display_title
+      "#{object.title}!"
+    end
+
+    field :notes, String, null: true do
+      argument :limit, Integer, required: false
+    end
+
+    def notes(limit: nil)
+      limit ? "note x#{limit}" : 'note'
+    end
+
+    # --- Plain Object type named like a connection, but not one ---
+    field :sync_connection, SyncConnectionType, null: true, connection: false
   end
 end

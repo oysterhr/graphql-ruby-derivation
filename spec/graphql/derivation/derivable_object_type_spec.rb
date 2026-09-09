@@ -110,7 +110,10 @@ RSpec.describe GraphQL::Derivation::DerivableObjectType do
         nil
       end
 
-      expect(object_class.fields.keys).to contain_exactly('title')
+      # `own_fields` rather than `fields`: the derivation stays pending after
+      # a failed resolution, so `fields` (a lazy-resolution hook) would
+      # re-raise instead of showing what was registered.
+      expect(object_class.own_fields.keys).to contain_exactly('title')
     end
 
     it 'uses plural phrasing when more than one inline field collides with a derived one' do

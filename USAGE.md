@@ -75,6 +75,42 @@ end
 GraphQL::Derivation::DerivableObjectType.resolve_all!
 ```
 
+## Example 2b — projections: derived types in another schema
+
+A derived type placed in a *different* schema from its source must not drag the source's
+neighbours in through its edges. Object-typed fields are copied as late-bound references to the
+type's GraphQL *name*, which the schema resolves to its own type of that name — a projection, or a
+legacy type still mounted there. Small types reached only through one field are projected inline.
+
+```ruby
+class TeamMembers::Types::TimeOffRequestType < TeamMembers::Types::BaseObject   # includes DerivableObjectType
+  derive_from TimeOff::Contracts::TimeOffRequestType do |pick|
+    pick.fields :id, :start_date, :end_date, :state,
+      :engagement,                            # edge: resolves to this schema's `Engagement`
+      file: %i[url content_type filename]     # nested: inline projection of the field's own type
+  end
+end
+
+class TeamMembers::Schema < GraphQL::Schema
+  extend GraphQL::Derivation::ProjectionSchema      # actionable boot errors (below)
+
+  orphan_types(*TeamMembers::Types.projections)     # every projection is part of the schema
+  query TeamMembers::Types::QueryType
+end
+```
+
+If the schema has no type named `Engagement`, defining it raises `MissingProjectionError`:
+
+```
+TeamMembers::Schema has no type named "Engagement", but TimeOffRequest.engagement needs one:
+it is derived from TimeOff::Contracts::TimeOffRequestType#engagement, which returns Contracts::EngagementType.
+Either add a projection of Contracts::EngagementType named "Engagement" to TeamMembers::Schema (...),
+or ... `pick.override(:engagement, type: SomeType)`, or ... `pick.expose_full(:engagement)`.
+```
+
+Enums and scalars are copied as-is (they have no edges). Instance resolver methods on the source
+type (`def submitted_on`) keep running on the copy. Fields keep their arguments.
+
 ## Example 3 — derive ObjectType fields from an ActiveRecord model
 
 ```ruby

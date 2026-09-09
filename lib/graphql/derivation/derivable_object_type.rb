@@ -7,13 +7,17 @@ module GraphQL
   module Derivation
     # Implements SPEC.md §7, a mixin for `GraphQL::Schema::Object`
     # subclasses that adds `derive_from`. The derivation is stored
-    # unevaluated at declaration time (SPEC.md §3.1) and only resolved once
-    # `resolve_all!` (or the per-class `resolve_derivation!`) fires.
+    # unevaluated at declaration time (SPEC.md §3.1) and resolved lazily: the
+    # first time anything reads the class's fields (graphql-ruby traversing
+    # the schema, a query, introspection, an explicit `resolve_derivation!`
+    # or `resolve_all!`), the pending derivation resolves first. Nothing has
+    # to be called in a particular order for derived fields to be there.
     module DerivableObjectType
       class << self
         # @return [Array<Class>] every class that has included this mixin,
-        #   in inclusion order. Used by `resolve_all!` to know what to
-        #   resolve -- deliberately not `ObjectSpace`-based (slow, fragile).
+        #   or inherits from one that did, in registration order. Used by
+        #   `resolve_all!` to know what to resolve -- deliberately not
+        #   `ObjectSpace`-based (slow, fragile).
         def included_classes
           @included_classes ||= []
         end
@@ -27,13 +31,15 @@ module GraphQL
         # SPEC.md §7.3: resolves every pending derivation across every class
         # that has included this mixin. Idempotent -- classes whose
         # derivation was already resolved (or that never called
-        # `derive_from`) are left untouched.
+        # `derive_from`) are left untouched. Optional since resolution is
+        # lazy; useful to surface every derivation error in one place (e.g.
+        # a boot spec).
         def resolve_all!
           included_classes.each(&:resolve_derivation!)
         end
 
         # Reload-safety seam (not part of the ordinary runtime API): forgets
-        # every class registered via the `included` hook. See
+        # every class registered via the `included`/`inherited` hooks. See
         # `DerivableInputObject.clear!` for the full rationale (identical
         # leak shape, mirrored here for `DerivableObjectType`). Called from
         # `GraphQL::Derivation::Rails.reset_for_reload!`.
@@ -44,6 +50,14 @@ module GraphQL
 
       # Class-level API mixed into `GraphQL::Schema::Object` subclasses.
       module ClassMethods
+        # Subclasses of a class that included the mixin (the usual host-app
+        # shape: `include` once in a base type, `derive_from` in each
+        # concrete type) are registered too, so `resolve_all!` sees them.
+        def inherited(subclass)
+          super
+          GraphQL::Derivation::DerivableObjectType.included_classes << subclass
+        end
+
         # SPEC.md §7.1/§7.2: declares a derivation source and an unevaluated
         # pick block. Validates the at-most-once constraint immediately; the
         # derivation itself is deferred until `resolve_derivation!` fires.
@@ -86,22 +100,65 @@ module GraphQL
         #   purely to forward to that recursive call. Defaults to nil, so
         #   ordinary (non-Rails) callers are unaffected.
         def resolve_derivation!(context: nil)
-          return unless defined?(@derivation_pick_block) && @derivation_pick_block
+          return unless derivation_pending?
 
           GraphQL::Derivation::DerivationResolutionGuard.guard(self) { resolve_pending_derivation!(context) }
         end
 
+        # --- Lazy resolution hooks -------------------------------------
+        #
+        # These are the three entry points graphql-ruby uses to read a
+        # type's fields: `all_field_definitions` when a schema traverses its
+        # types at definition time (`Schema::Addition`), and `fields` /
+        # `get_field` at query and introspection time. Resolving here means
+        # a schema can never observe a derived type with its derived fields
+        # missing, whatever order classes were loaded in.
+        #
+        # A re-entrant call (this class's own resolution reads `fields` to
+        # check for collisions) is passed straight through: the class is on
+        # the guard's in-progress stack, so resolving again would be
+        # reported as a cycle.
+
+        def all_field_definitions(...)
+          ensure_derivation_resolved!
+          super
+        end
+
+        def fields(...)
+          ensure_derivation_resolved!
+          super
+        end
+
+        def get_field(...)
+          ensure_derivation_resolved!
+          super
+        end
+
         private
+
+        def derivation_pending?
+          defined?(@derivation_pick_block) && @derivation_pick_block ? true : false
+        end
+
+        def ensure_derivation_resolved!
+          return unless derivation_pending?
+          return if GraphQL::Derivation::DerivationResolutionGuard.in_progress.include?(self)
+
+          resolve_derivation!
+        end
 
         # The guarded body of `resolve_derivation!`, split out so the public
         # method itself stays a short guard-then-delegate wrapper.
         def resolve_pending_derivation!(context)
           resolve_source_derivation!(context)
 
-          pre_existing_names = fields.keys
+          # `all_field_definitions`, not `fields`: graphql-ruby >= 2.6 warns
+          # when `fields` is read on a type that has none yet, which is
+          # exactly the state a derived type is in at this point.
+          pre_existing_names = all_field_definitions.map(&:graphql_name)
 
           derived_fields = GraphQL::Derivation::FieldDerivation.resolve(
-            @derivation_source, @derivation_pick_block,
+            @derivation_source, @derivation_pick_block, destination: self,
           )
 
           check_collisions!(pre_existing_names, derived_fields)

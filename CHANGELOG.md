@@ -8,12 +8,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Projections (SPEC.md §5.5, §7.4): a derived Object field whose source returns an Object,
+  Interface or Union type is copied as `GraphQL::Derivation::ProjectedEdge`, a late-bound type
+  graphql-ruby resolves by GraphQL name in whichever schema the derived type is added to. No
+  per-field type override or canonical-to-projection registry is needed. `pick.project(name) {}`
+  (and the `pick.fields(name: [...])` shorthand) derives an anonymous nested type inline from a
+  field's own return type; `pick.expose_full(name)` and `pick.override(name, type: T)` are the
+  explicit escape hatches.
+- `GraphQL::Derivation::ProjectionSchema`: `extend` onto a schema to get
+  `MissingProjectionError` (an edge with no type of its name in the schema, with the derived
+  field, source field and canonical type in the message) and `DuplicateTypeNameError` (two
+  classes under one GraphQL name, listing the fields returning each) at schema definition time.
+- Field Derivation resolver Case 4: an instance method on the source type is carried across via
+  `GraphQL::Derivation::SourceResolverExtension` instead of being silently skipped.
+
 - `CONTRIBUTING.md`, per Oyster's OSS release policy's "Release Requirements" (README must
   document contribution guidelines; a `CONTRIBUTING.md`, if applicable, should be included).
   Human-oriented; points to `AGENTS.md` for full process detail.
 
 ### Changed
 
+- `DerivableObjectType` resolves lazily when graphql-ruby first reads the class's fields
+  (`all_field_definitions`, `fields`, `get_field`); `resolve_all!` is optional and no longer has to
+  run before a schema is defined. Subclasses of an including base class are registered too. A
+  failed derivation keeps raising on later reads.
+- Derived fields keep the rest of the source definition: arguments, extras, custom extensions,
+  description, deprecation reason, `connection:`, `scope:`; they are built with the destination's
+  `field_class` and owned by the destination.
+- `Mappers::ObjectTypeToField` excludes Relay connections by ancestry only; a plain Object type
+  merely named `...Connection` stays derivable.
 - `GraphQL::Derivation::Rails::ArgumentParsingError` renamed to
   `GraphQL::Derivation::Rails::ArgumentCoercionError` -- "parsing" misnamed the operation; every
   other reference to it in code and docs already says "coercion" (`coerce_input`,

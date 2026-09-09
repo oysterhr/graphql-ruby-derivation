@@ -9,11 +9,14 @@ require 'graphql/derivation/pick_dsl/fields'
 require 'graphql/derivation/mappers/object_type_to_argument'
 require 'graphql/derivation/mappers/input_object_to_argument'
 require 'graphql/derivation/mappers/object_type_to_field'
+require 'graphql/derivation/projected_edge'
+require 'graphql/derivation/source_resolver_extension'
 require 'graphql/derivation/engines/argument_derivation'
 require 'graphql/derivation/engines/field_derivation'
 require 'graphql/derivation/derivation_resolution_guard'
 require 'graphql/derivation/derivable_input_object'
 require 'graphql/derivation/derivable_object_type'
+require 'graphql/derivation/projection_schema'
 
 module GraphQL
   module Derivation

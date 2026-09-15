@@ -23,6 +23,34 @@ RSpec.describe GraphQL::Derivation::DerivableObjectType do
     end
   end
 
+  describe 'lazy resolution on first use' do
+    it 'registers derived fields the first time .fields is read, without resolve_all!' do
+      object_class = build_object_type_class do
+        derive_from FixtureSchema::ExpenseType do |pick|
+          pick.fields(:title, :description)
+        end
+      end
+
+      # No resolve_all! / resolve_derivation! -- reading .fields must resolve.
+      expect(object_class.fields.keys).to contain_exactly('title', 'description')
+    end
+
+    it 'does not re-run the pick block on repeated .fields reads' do
+      call_count = 0
+      object_class = build_object_type_class do
+        derive_from FixtureSchema::ExpenseType do |pick|
+          call_count += 1
+          pick.fields(:title)
+        end
+      end
+
+      object_class.fields
+      object_class.fields
+
+      expect(call_count).to eq(1)
+    end
+  end
+
   describe 'derivation resolution (§10.4 integration: derived fields appear)' do
     it 'registers derived fields on the class after resolve_all! fires' do
       object_class = build_object_type_class do

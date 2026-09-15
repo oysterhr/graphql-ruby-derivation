@@ -88,14 +88,51 @@ module GraphQL
         def resolve_derivation!(context: nil)
           return unless defined?(@derivation_pick_block) && @derivation_pick_block
 
+          @resolving_derivation = true
           GraphQL::Derivation::DerivationResolutionGuard.guard(self) { resolve_pending_derivation!(context) }
+        ensure
+          @resolving_derivation = false
+        end
+
+        # graphql-ruby reads `.fields` whenever it builds the schema, runs
+        # introspection, dumps the SDL, or resolves a selection. Resolving a
+        # pending `derive_from` here means the derivation is applied the first
+        # time the class is actually used -- the "resolves lazily on first use"
+        # behaviour that USAGE.CAVEKIT.md's "Resolution timing" already
+        # promises. So a consumer no longer has to call `resolve_all!` (or hook
+        # every `Schema.execute`) for derived fields to appear in the schema.
+        # `resolve_all!` still works as an eager warm-up (e.g. a Rails
+        # `to_prepare`), it is just no longer required for correctness.
+        def fields(*args)
+          resolve_derivation_lazily!
+          super
         end
 
         private
 
+        # First-use trigger behind `fields`, guarded twice so it stays safe:
+        #   * `@resolving_derivation` -- `resolve_pending_derivation!` itself
+        #     reads `fields.keys` (the pre-existing names) mid-resolution.
+        #     Without this guard that read would re-enter resolution, and the
+        #     cycle guard would wrongly flag the class as a self-cycle.
+        #   * `@derivation_resolution_attempted` -- a resolution that already
+        #     ran (or already raised, e.g. an inline/derived collision) is never
+        #     retried from the `fields` path. A misconfigured class therefore
+        #     behaves exactly as it did under explicit `resolve_derivation!`:
+        #     the error surfaces once, and later `.fields` reads return whatever
+        #     was registered rather than re-raising on every access.
+        def resolve_derivation_lazily!
+          return if @resolving_derivation
+          return if @derivation_resolution_attempted
+
+          resolve_derivation!
+        end
+
         # The guarded body of `resolve_derivation!`, split out so the public
         # method itself stays a short guard-then-delegate wrapper.
         def resolve_pending_derivation!(context)
+          @derivation_resolution_attempted = true
+
           resolve_source_derivation!(context)
 
           pre_existing_names = fields.keys

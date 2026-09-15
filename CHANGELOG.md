@@ -8,6 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Lazy resolution on first use. `DerivableInputObject` now resolves a pending `derive_from` the
+  first time its `.arguments` are read, and `DerivableObjectType` the first time its `.fields`
+  are read (both guarded against the re-entrant read inside `resolve_pending_derivation!`, and
+  against retrying an already-attempted resolution). graphql-ruby reads these during schema build,
+  introspection, SDL dump and coercion, so derived arguments/fields now appear without any
+  explicit `resolve_all!` call. This makes the code match the "resolves lazily on first use"
+  behaviour that `USAGE.CAVEKIT.md`'s "Resolution timing" already documented. `resolve_all!` is
+  unchanged and still useful as an eager warm-up (e.g. a Rails `to_prepare`), it is just no longer
+  required for correctness -- consumers no longer need to hook `Schema.execute` to force resolution.
 - `CONTRIBUTING.md`, per Oyster's OSS release policy's "Release Requirements" (README must
   document contribution guidelines; a `CONTRIBUTING.md`, if applicable, should be included).
   Human-oriented; points to `AGENTS.md` for full process detail.

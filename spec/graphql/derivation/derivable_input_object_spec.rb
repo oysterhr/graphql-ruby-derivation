@@ -120,6 +120,65 @@ RSpec.describe GraphQL::Derivation::DerivableInputObject do
     end
   end
 
+  describe 'lazy resolution on first use' do
+    it 'registers derived arguments the first time .arguments is read, without resolve_all!' do
+      input_class = build_input_object_class do
+        derive_from FixtureSchema::ExpenseType do |pick|
+          pick.required(:title, :amount_cents)
+          pick.optional(:description)
+        end
+      end
+
+      # No resolve_all! / resolve_derivation! -- reading .arguments must resolve.
+      expect(input_class.arguments.keys).to contain_exactly('title', 'amountCents', 'description')
+    end
+
+    it 'does not re-run the pick block on repeated .arguments reads' do
+      call_count = 0
+      input_class = build_input_object_class do
+        derive_from FixtureSchema::ExpenseType do |pick|
+          call_count += 1
+          pick.required(:title)
+        end
+      end
+
+      input_class.arguments
+      input_class.arguments
+
+      expect(call_count).to eq(1)
+    end
+
+    it 'surfaces a collision on the first .arguments read' do
+      input_class = build_input_object_class do
+        derive_from FixtureSchema::ExpenseType do |pick|
+          pick.required(:title)
+        end
+
+        argument :title, String, required: true
+      end
+
+      expect { input_class.arguments }.to raise_error(GraphQL::Derivation::ConfigurationError, /title/)
+    end
+
+    it 'does not re-raise on later .arguments reads once a collision has surfaced' do
+      input_class = build_input_object_class do
+        derive_from FixtureSchema::ExpenseType do |pick|
+          pick.required(:title)
+        end
+
+        argument :title, String, required: true
+      end
+
+      begin
+        input_class.arguments
+      rescue GraphQL::Derivation::ConfigurationError
+        nil
+      end
+
+      expect(input_class.arguments.keys).to contain_exactly('title')
+    end
+  end
+
   describe 'collision detection (§10.4 integration)' do
     it 'raises ConfigurationError at resolution time when an inline argument collides with a derived one' do
       input_class = build_input_object_class do

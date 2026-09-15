@@ -153,6 +153,15 @@ reloader — see `docs/SPEC.md` §6.3/§7.3/§8.2 for exact hooks
 (`Rails.application.reloader.to_prepare` / `before_class_unload` +
 `GraphQL::Derivation::Rails.reset_for_reload!`).
 
+**Resolution is not internally synchronized — run it single-threaded.** The cycle-detection
+stack (`DerivationResolutionGuard.in_progress`) is process-wide, so two threads resolving at
+the same time can corrupt it. Call `resolve_all!` as an **eager warm-up before serving
+concurrent traffic** — the Rails integration does exactly this in `to_prepare`, which runs at
+boot (and after each class reload) before any request thread. Lazy first-use resolution is a
+convenience for cases where the warm-up has not run and first touch is already serialized (e.g.
+Rails' dev load interlock). If you build derivable types outside Rails on a threaded server,
+call `resolve_all!` once at startup rather than relying on the first concurrent read to resolve.
+
 ## Pick DSL cheat sheet
 
 | Method | Used by | Does |

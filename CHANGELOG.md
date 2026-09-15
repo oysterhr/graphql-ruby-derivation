@@ -17,6 +17,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   behaviour that `USAGE.CAVEKIT.md`'s "Resolution timing" already documented. `resolve_all!` is
   unchanged and still useful as an eager warm-up (e.g. a Rails `to_prepare`), it is just no longer
   required for correctness -- consumers no longer need to hook `Schema.execute` to force resolution.
+  Note: resolution is still **not internally synchronized** (the cycle-detection stack is
+  process-wide), so it is expected to run single-threaded -- run `resolve_all!` as an eager warm-up
+  before serving concurrent traffic, as the Rails `to_prepare` integration does. See the expanded
+  "Resolution timing" section in `USAGE.CAVEKIT.md`.
 - `CONTRIBUTING.md`, per Oyster's OSS release policy's "Release Requirements" (README must
   document contribution guidelines; a `CONTRIBUTING.md`, if applicable, should be included).
   Human-oriented; points to `AGENTS.md` for full process detail.

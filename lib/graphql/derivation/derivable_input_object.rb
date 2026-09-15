@@ -127,6 +127,14 @@ module GraphQL
         #     behaves exactly as it did under explicit `resolve_derivation!`:
         #     the error surfaces once, and later `.arguments` reads return
         #     whatever was registered rather than re-raising on every access.
+        #
+        # Only the lazy path consults this flag; an explicit `resolve_all!` does
+        # not, so a `resolve_all!` that runs AFTER a swallowed lazy collision on
+        # the same class object would re-resolve and re-raise. The Rails
+        # lifecycle never produces that order: `to_prepare` runs `resolve_all!`
+        # at boot before any read, and a reload builds a fresh class object with
+        # fresh flags. The eager warm-up is thus always the first resolver, so a
+        # collision fails loudly at boot rather than being masked.
         def resolve_derivation_lazily!
           return if @resolving_derivation
           return if @derivation_resolution_attempted

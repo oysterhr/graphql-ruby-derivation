@@ -16,8 +16,10 @@ module GraphQL
       # mapping is identity -- the sibling argument's own type is reused
       # directly (the sibling has already gone through derivation, so its type
       # is final). Mirrors the other mappers' `Candidate.type` contract so
-      # `resolve_type` can treat it uniformly.
-      SiblingCandidate = Struct.new(:type)
+      # `resolve_type` can treat it uniformly. Also carries the sibling
+      # argument itself, the same way `InputObjectToArgument::Candidate` does,
+      # so its option metadata carries across too (SPEC.md §4.4).
+      SiblingCandidate = Struct.new(:type, :argument)
 
       module_function
 
@@ -137,7 +139,7 @@ module GraphQL
           # the unwrapped (and re-listed, if a list) type is reused -- the same
           # treatment InputObjectToArgument applies to identity-mapped types.
           type = argument.type.list? ? [argument.type.unwrap] : argument.type.unwrap
-          result[argument.keyword] = SiblingCandidate.new(type)
+          result[argument.keyword] = SiblingCandidate.new(type, argument)
         end
       end
 
@@ -151,9 +153,65 @@ module GraphQL
         # Object-type candidates; it is not itself a `GraphQL::Schema::
         # Argument` keyword, so it must not be forwarded.
         argument_opts = overrides.except(:input_type)
-        opts = {required: required}.merge(argument_opts)
+        # Merge order matters: source option metadata sits in the middle so
+        # an explicit `pick.override` always wins over it, the same way
+        # `pick.override` already wins over the derived `required:` -- only
+        # `required:` itself is never touched by `source_options`, since
+        # requiredness is the pick block's own job (SPEC.md §4.4).
+        opts = {required: required}.merge(source_options(candidate, required: required)).merge(argument_opts)
 
-        GraphQL::Schema::Argument.new(name, type, owner: nil, **opts)
+        argument = GraphQL::Schema::Argument.new(name, type, owner: nil, **opts)
+        # An explicit `pick.override(name, validates: ...)` already built its
+        # own validators via `argument_opts` above and must win -- only
+        # transplant the source's validators when the override didn't supply
+        # any of its own.
+        transplant_validators(argument, source_argument(candidate)) unless argument_opts.key?(:validates)
+        argument
+      end
+
+      # SPEC.md §4.4: when `candidate` carries a source `GraphQL::Schema::
+      # Argument` (InputObject, Mutation, and sibling sources all do -- an
+      # ObjectType-field candidate does not, since fields have no `prepare:`/
+      # `validates:` equivalent), its option metadata carries across to the
+      # derived argument. `validates:` is handled separately by
+      # `transplant_validators`, since graphql-ruby has already compiled it
+      # into `Validator` instances by the time we can read it back -- there is
+      # no raw config hash left to re-pass as `validates:`.
+      def source_options(candidate, required:)
+        argument = source_argument(candidate)
+        return {} unless argument
+
+        opts = {prepare: argument.prepare, description: argument.description}
+        opts[:default_value] = argument.default_value if argument.default_value?
+        # graphql-ruby forbids a deprecated required argument (validated in
+        # `Argument#deprecation_reason=`), so a deprecation_reason is only
+        # copied when the derived argument stays optional -- otherwise a
+        # source field that is optional-and-deprecated would start raising
+        # the moment a pick block re-controls it with `pick.required`.
+        opts[:deprecation_reason] = argument.deprecation_reason if argument.deprecation_reason && !required
+        opts
+      end
+
+      def source_argument(candidate)
+        candidate.argument if candidate.respond_to?(:argument)
+      end
+
+      # `validates:` can't be forwarded as a build option (see
+      # `source_options`), so the source argument's already-compiled
+      # `Validator` instances are transplanted directly onto the derived
+      # argument instead -- the same "no public setter exists" exception
+      # `register_derived_argument` already relies on for `@owner`
+      # (`derivable_input_object.rb`). `dup`ed rather than shared: `validates`
+      # (`HasValidators#validates`) appends to `@own_validators` in place, so
+      # a shared array would let a later `pick.override(name, validates:
+      # ...)` on the derived argument mutate the source argument's own list.
+      def transplant_validators(argument, source)
+        return unless source
+
+        validators = source.validators
+        return if validators.empty?
+
+        argument.instance_variable_set(:@own_validators, validators.dup)
       end
 
       def resolve_type(name, candidate, overrides)
@@ -179,6 +237,9 @@ module GraphQL
         :source_name,
         :sibling_candidates,
         :build_argument,
+        :source_options,
+        :source_argument,
+        :transplant_validators,
         :resolve_type
     end
   end

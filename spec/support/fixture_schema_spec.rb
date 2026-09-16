@@ -82,7 +82,7 @@ RSpec.describe 'fixture schema' do
   describe FixtureSchema::ExpenseBaseInput do
     it 'defines the expected required and optional arguments' do
       expect(described_class.arguments.keys).to contain_exactly(
-        'title', 'description', 'amountCents', 'category', 'reimbursable',
+        'title', 'description', 'amountCents', 'category', 'reimbursable', 'notes',
       )
     end
 

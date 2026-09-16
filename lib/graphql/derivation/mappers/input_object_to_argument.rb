@@ -14,10 +14,17 @@ module GraphQL
       # `GraphQL::Schema::Member::HasArguments`), so `ArgumentDerivation`
       # routes both source types here rather than duplicating this mapper.
       class InputObjectToArgument
-        # A regular candidate carrying an already-resolved type. Mirrors
-        # ObjectTypeToArgument::Candidate so ArgumentDerivation can treat
-        # both mappers' candidates uniformly.
-        Candidate = Struct.new(:type)
+        # A regular candidate carrying an already-resolved type, plus the
+        # source `GraphQL::Schema::Argument` itself. `type` keeps this
+        # struct's shape aligned with ObjectTypeToArgument::Candidate so
+        # ArgumentDerivation can treat both mappers' candidates uniformly;
+        # `argument` is the extra piece InputObject/Mutation sources carry
+        # that a plain ObjectType field candidate does not -- it lets
+        # ArgumentDerivation#build_argument copy the source argument's own
+        # option metadata (`prepare:`, `description:`, ...) across the
+        # derivation instead of dropping everything but the type (SPEC.md
+        # §4.4).
+        Candidate = Struct.new(:type, :argument)
 
         def self.candidates(source)
           new(source).candidates
@@ -37,7 +44,7 @@ module GraphQL
             # leak through; only the unwrapped (and re-listed, if a list)
             # type is reused.
             type = argument.type.list? ? [argument.type.unwrap] : argument.type.unwrap
-            result[argument.keyword] = Candidate.new(type)
+            result[argument.keyword] = Candidate.new(type, argument)
           end
         end
 

@@ -135,6 +135,109 @@ RSpec.describe GraphQL::Derivation::ArgumentDerivation do
 
         expect(category.type).to be_non_null
       end
+
+      # SPEC.md §4.4: the derived argument must preserve the source
+      # argument's own option metadata (`prepare:`, `description:`,
+      # `default_value:`, `validates:`, `deprecation_reason:`) -- only
+      # `required:` is intentionally re-controlled by the pick block. Before
+      # this was fixed, `build_argument` only ever merged `{required:}` with
+      # `pick.override` opts, so every one of these was silently dropped.
+      it 'preserves prepare:' do
+        arguments = resolve(FixtureSchema::ExpenseBaseInput) { |pick| pick.optional(:category) }
+        category = arguments.find { |argument| argument.graphql_name == 'category' }
+
+        expect(category.prepare).to eq(:strip)
+      end
+
+      it 'preserves description:' do
+        arguments = resolve(FixtureSchema::ExpenseBaseInput) { |pick| pick.optional(:category) }
+        category = arguments.find { |argument| argument.graphql_name == 'category' }
+
+        expect(category.description).to eq('Expense category')
+      end
+
+      it 'preserves default_value:' do
+        arguments = resolve(FixtureSchema::ExpenseBaseInput) { |pick| pick.optional(:reimbursable) }
+        reimbursable = arguments.find { |argument| argument.graphql_name == 'reimbursable' }
+
+        expect(reimbursable.default_value).to be(true)
+      end
+
+      it 'does not set default_value: when the source argument has none' do
+        arguments = resolve(FixtureSchema::ExpenseBaseInput) { |pick| pick.optional(:category) }
+        category = arguments.find { |argument| argument.graphql_name == 'category' }
+
+        expect(category.default_value?).to be(false)
+      end
+
+      it 'preserves validates:' do
+        # The source `title` argument allows up to 40 characters
+        # (`FixtureSchema::ExpenseBaseInput`) -- a 41-character value must
+        # still fail validation on the derived argument.
+        arguments = resolve(FixtureSchema::ExpenseBaseInput) { |pick| pick.optional(:title) }
+        title = arguments.find { |argument| argument.graphql_name == 'title' }
+
+        expect(title.validators.first.validate(nil, nil, 'a' * 41)).not_to be_nil
+      end
+
+      it 'preserves deprecation_reason: when the pick block keeps the argument optional' do
+        arguments = resolve(FixtureSchema::ExpenseBaseInput) { |pick| pick.optional(:notes) }
+        notes = arguments.find { |argument| argument.graphql_name == 'notes' }
+
+        expect(notes.deprecation_reason).to eq('Use description instead')
+      end
+
+      it 'does not raise when pick.required overrides a deprecated-and-optional source field' do
+        # graphql-ruby forbids a deprecated required argument (`Required
+        # arguments cannot be deprecated`) -- `pick.required` winning over
+        # the source's nullability must not resurrect that error for a
+        # source field that happened to be optional-and-deprecated.
+        expect do
+          resolve(FixtureSchema::ExpenseBaseInput) { |pick| pick.required(:notes) }
+        end.not_to raise_error
+      end
+
+      it 'drops deprecation_reason: rather than raise when pick.required overrides nullability' do
+        arguments = resolve(FixtureSchema::ExpenseBaseInput) { |pick| pick.required(:notes) }
+        notes = arguments.find { |argument| argument.graphql_name == 'notes' }
+
+        expect(notes.deprecation_reason).to be_nil
+      end
+
+      it 'lets an explicit pick.override win over the source default_value:' do
+        arguments = resolve(FixtureSchema::ExpenseBaseInput) do |pick|
+          pick.optional(:reimbursable)
+          pick.override(:reimbursable, default_value: false)
+        end
+        reimbursable = arguments.find { |argument| argument.graphql_name == 'reimbursable' }
+
+        expect(reimbursable.default_value).to be(false)
+      end
+
+      it 'lets an explicit pick.override win over the source validates:' do
+        # The source `title` argument allows up to 40 characters
+        # (`FixtureSchema::ExpenseBaseInput`); the override tightens that to
+        # 10, so an 11-character value must fail validation only if the
+        # override -- not the transplanted source validator -- is the one
+        # actually in effect.
+        arguments = resolve(FixtureSchema::ExpenseBaseInput) do |pick|
+          pick.optional(:title)
+          pick.override(:title, validates: {length: {maximum: 10}})
+        end
+        title = arguments.find { |argument| argument.graphql_name == 'title' }
+
+        expect(title.validators.first.validate(nil, nil, '01234567890')).not_to be_nil
+      end
+
+      it 'lets an explicit pick.override win over the source prepare:' do
+        arguments = resolve(FixtureSchema::ExpenseBaseInput) do |pick|
+          pick.optional(:category)
+          pick.override(:category, prepare: :upcase)
+        end
+        category = arguments.find { |argument| argument.graphql_name == 'category' }
+
+        expect(category.prepare).to eq(:upcase)
+      end
     end
 
     context 'with a Mutation source' do

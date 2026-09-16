@@ -53,6 +53,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- `derive_from` (via `pick.required`/`pick.optional`) no longer drops a picked argument's own
+  option metadata. `ArgumentDerivation#build_argument` used to build the derived argument from
+  only `{required:}` plus any `pick.override` opts, discarding everything else the source
+  `GraphQL::Schema::Argument` was declared with. A derived argument now also carries across the
+  source's `prepare:`, `description:`, `default_value:` (when configured), `validates:`, and
+  `deprecation_reason:` (dropped, rather than raised, when `pick.required` makes the derived
+  argument non-null -- graphql-ruby forbids a deprecated required argument). An explicit
+  `pick.override(name, **opts)` still wins over any of these, and `required:` itself is still
+  controlled solely by `pick.required`/`pick.optional`, exactly as before. Applies to InputObject,
+  Mutation, and Symbol (sibling action) sources -- not to ObjectType-field sources, whose
+  candidates come from `GraphQL::Schema::Field`, which has no `prepare:`/`validates:` equivalent
+  to carry.
 - `ControllerConcern#arguments` no longer raises `ArgumentCoercionError` ("Field is not defined")
   for Rails routing internals (`controller`, `action`) or any dynamic route segment not declared
   as an argument (e.g. `params[:engagement_id]` on a nested resource route). A real Rails

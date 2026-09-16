@@ -7,8 +7,9 @@ module GraphQL
   module Derivation
     # Implements SPEC.md §6, a mixin for `GraphQL::Schema::InputObject`
     # subclasses that adds `derive_from`. The derivation is stored
-    # unevaluated at declaration time (SPEC.md §3.1) and only resolved once
-    # `resolve_all!` (or the per-class `resolve_derivation!`) fires.
+    # unevaluated at declaration time (SPEC.md §3.1) and resolved lazily, the
+    # first time graphql-ruby reads the class's arguments -- or earlier, if
+    # `resolve_all!` (or the per-class `resolve_derivation!`) fires first.
     module DerivableInputObject
       class << self
         # @return [Array<Class>] every class that has included this mixin,
@@ -64,10 +65,10 @@ module GraphQL
         # SPEC.md §6.3: resolves this class's pending derivation, if any.
         # Idempotent -- a second call is a no-op once resolution has
         # happened (or if `derive_from` was never called). The early-return
-        # check above happens BEFORE the cycle guard is engaged, so
-        # resolving an already-finished dependency never touches the
-        # in-progress stack -- only a derivation that is genuinely being
-        # computed right now participates in cycle detection.
+        # check happens BEFORE the cycle guard is engaged, so resolving an
+        # already-finished dependency never touches the in-progress stack --
+        # only a derivation that is genuinely being computed right now
+        # participates in cycle detection.
         #
         # If `@derivation_source` is itself Derivable (i.e. responds to
         # `resolve_derivation!` -- another `DerivableInputObject` or
@@ -82,74 +83,114 @@ module GraphQL
         # crosses both mixins (e.g. an ArgumentDerivation ObjectType-source
         # that is itself a pending DerivableObjectType).
         #
+        # A resolution that raises (a collision, a cycle, a pick block that
+        # blows up) leaves the derivation pending, so the next read -- lazy
+        # or explicit -- runs it again and raises again. The failure stays
+        # loud on every access instead of surfacing once and then quietly
+        # serving a type with its derived arguments missing.
+        #
         # @param context [#resolve_sibling_arguments, nil] forwarded to
         #   ArgumentDerivation for Symbol (sibling action) sources. Only the
         #   Rails ControllerConcern (SPEC.md §8) supplies this -- ordinary
         #   InputObjects never use Symbol sources (SPEC.md §11.1), so the
-        #   default of nil keeps non-Rails callers unchanged. Also forwarded
+        #   default of nil keeps non-Rails callers unchanged. When nil, the
+        #   resolver registered via `allow_sibling_sources!` (if any) is used
+        #   instead, so a lazy first read of a controller-generated
+        #   InputObject can still resolve its Symbol source. Also forwarded
         #   to a Derivable source's own recursive `resolve_derivation!` call,
         #   in case that source is itself part of the same Rails-generated,
         #   context-carrying chain -- harmless (defaults to nil) for the
         #   ordinary ObjectType/InputObject-source case.
         def resolve_derivation!(context: nil)
-          return unless defined?(@derivation_pick_block) && @derivation_pick_block
+          return unless pending_derivation?
 
-          @resolving_derivation = true
-          GraphQL::Derivation::DerivationResolutionGuard.guard(self) { resolve_pending_derivation!(context) }
-        ensure
-          @resolving_derivation = false
+          GraphQL::Derivation::DerivationResolutionGuard.guard(self) do
+            resolve_pending_derivation!(context || sibling_resolver)
+          end
         end
 
-        # graphql-ruby reads `.arguments` whenever it builds the schema, runs
-        # introspection, dumps the SDL, or coerces input. Resolving a pending
-        # `derive_from` here means the derivation is applied the first time the
-        # class is actually used -- the "resolves lazily on first use" behaviour
-        # that USAGE.CAVEKIT.md's "Resolution timing" already promises. So a
-        # consumer no longer has to call `resolve_all!` (or hook every
-        # `Schema.execute`) for derived arguments to appear in the schema.
-        # `resolve_all!` still works as an eager warm-up (e.g. a Rails
-        # `to_prepare`), it is just no longer required for correctness.
-        def arguments(*args)
-          resolve_derivation_lazily!
+        # Lazy resolution on first use. These are the only methods
+        # graphql-ruby reads an InputObject's arguments through -- schema
+        # build (`Schema::Addition`), `Visibility`, the legacy `Warden`,
+        # introspection, SDL dump, static validation, variable validation and
+        # coercion all end up in `arguments`, `get_argument`,
+        # `all_argument_definitions` or `any_arguments?`. Resolving a pending
+        # `derive_from` right before delegating means the derived arguments
+        # are in place the first time the type is used, with no
+        # `resolve_all!` required. `resolve_all!` still works as an eager
+        # warm-up (e.g. a Rails `to_prepare`) that fails at boot instead of
+        # on the first request.
+        #
+        # `own_arguments` is deliberately NOT the hook, even though every
+        # reader above goes through it: mirroring `DerivableObjectType`, the
+        # hooks sit on the read API so that declaring members in the class
+        # body never triggers a resolution.
+        def arguments(...)
+          resolve_pending_derivations_in_ancestry!
+          super
+        end
+
+        def get_argument(...)
+          resolve_pending_derivations_in_ancestry!
+          super
+        end
+
+        def all_argument_definitions
+          resolve_pending_derivations_in_ancestry!
+          super
+        end
+
+        def any_arguments?
+          resolve_pending_derivations_in_ancestry!
           super
         end
 
         private
 
-        # First-use trigger behind `arguments`, guarded twice so it stays safe:
-        #   * `@resolving_derivation` -- `resolve_pending_derivation!` itself
-        #     reads `arguments.keys` (the pre-existing names) mid-resolution.
-        #     Without this guard that read would re-enter resolution, and the
-        #     cycle guard would wrongly flag the class as a self-cycle.
-        #   * `@derivation_resolution_attempted` -- a resolution that already
-        #     ran (or already raised, e.g. an inline/derived collision) is never
-        #     retried from the `arguments` path. A misconfigured class therefore
-        #     behaves exactly as it did under explicit `resolve_derivation!`:
-        #     the error surfaces once, and later `.arguments` reads return
-        #     whatever was registered rather than re-raising on every access.
-        #
-        # Only the lazy path consults this flag; an explicit `resolve_all!` does
-        # not, so a `resolve_all!` that runs AFTER a swallowed lazy collision on
-        # the same class object would re-resolve and re-raise. The Rails
-        # lifecycle never produces that order: `to_prepare` runs `resolve_all!`
-        # at boot before any read, and a reload builds a fresh class object with
-        # fresh flags. The eager warm-up is thus always the first resolver, so a
-        # collision fails loudly at boot rather than being masked.
-        def resolve_derivation_lazily!
-          return if @resolving_derivation
-          return if @derivation_resolution_attempted
+        def pending_derivation?
+          defined?(@derivation_pick_block) && @derivation_pick_block ? true : false
+        end
 
-          resolve_derivation!
+        # The read hooks resolve every Derivable class in the ancestry, not
+        # just `self`: graphql-ruby walks `ancestors` and reads each one's
+        # `own_arguments` directly, so a subclass of a derivable type would
+        # otherwise never trigger its parent's pending derivation. A class
+        # the current thread is already resolving is skipped -- that read is
+        # the re-entrant one from inside `resolve_pending_derivation!`, and
+        # must fall through to the pre-derivation members rather than start
+        # a second resolution.
+        def resolve_pending_derivations_in_ancestry!
+          derivable_ancestry.each do |klass|
+            next if GraphQL::Derivation::DerivationResolutionGuard.resolving?(klass)
+
+            klass.resolve_derivation!
+          end
+        end
+
+        # Memoized: a class's superclass chain never changes after it is
+        # defined, and modules included later can't respond to
+        # `resolve_derivation!`, so this cannot go stale. Keeps the hot
+        # `get_argument` path to a walk over one to three classes instead of
+        # a fresh `ancestors` array per call.
+        def derivable_ancestry
+          @derivable_ancestry ||= ancestors.select { |ancestor| ancestor.respond_to?(:resolve_derivation!) }
         end
 
         # The guarded body of `resolve_derivation!`, split out so the public
-        # method itself stays a short guard-then-delegate wrapper.
+        # method itself stays a short guard-then-delegate wrapper. Re-checks
+        # `pending_derivation?` because the guard's lock may have been held
+        # by another thread that finished this exact resolution meanwhile.
         def resolve_pending_derivation!(context)
-          @derivation_resolution_attempted = true
+          return unless pending_derivation?
 
           resolve_source_derivation!(context)
 
-          pre_existing_names = arguments.keys
+          # `all_argument_definitions` rather than `arguments.keys`: same
+          # names (inherited ones included), but without the visibility pass
+          # and without graphql-ruby's "Input Object types must have
+          # arguments" warning, which a derive-only type would otherwise emit
+          # mid-resolution.
+          pre_existing_names = all_argument_definitions.map(&:graphql_name)
 
           derived_arguments = GraphQL::Derivation::ArgumentDerivation.resolve(
             @derivation_source, @derivation_pick_block, context: context,
@@ -178,10 +219,18 @@ module GraphQL
         # auto-generated InputObjects DO have an action registry (the
         # controller class) to resolve Symbol siblings against, so they opt
         # into Symbol sources by calling this (via `send`, since it's private)
-        # before `derive_from`. User-defined DerivableInputObjects have no way
-        # to reach this, so §11.1's rejection still applies to them.
-        def allow_sibling_sources!
+        # before `derive_from`, passing that registry as +resolver+. It is
+        # remembered as the default `context:` so that a lazy first read (one
+        # graphql-ruby makes with no `context:` to give) can still resolve a
+        # Symbol source. User-defined DerivableInputObjects have no way to
+        # reach this, so §11.1's rejection still applies to them.
+        def allow_sibling_sources!(resolver = nil)
           @allow_sibling_sources = true
+          @sibling_resolver = resolver
+        end
+
+        def sibling_resolver
+          defined?(@sibling_resolver) ? @sibling_resolver : nil
         end
 
         # ArgumentDerivation builds arguments unattached (`owner: nil`) -- it

@@ -160,7 +160,7 @@ RSpec.describe GraphQL::Derivation::DerivableInputObject do
       expect { input_class.arguments }.to raise_error(GraphQL::Derivation::ConfigurationError, /title/)
     end
 
-    it 'does not re-raise on later .arguments reads once a collision has surfaced' do
+    it 'keeps raising on every later .arguments read while the collision is unfixed' do
       input_class = build_input_object_class do
         derive_from FixtureSchema::ExpenseType do |pick|
           pick.required(:title)
@@ -175,7 +175,10 @@ RSpec.describe GraphQL::Derivation::DerivableInputObject do
         nil
       end
 
-      expect(input_class.arguments.keys).to contain_exactly('title')
+      # A failed resolution must not be remembered as "done": a type that
+      # quietly served only its inline arguments after one error would hide
+      # the misconfiguration from every later request.
+      expect { input_class.arguments }.to raise_error(GraphQL::Derivation::ConfigurationError, /title/)
     end
   end
 
@@ -209,7 +212,9 @@ RSpec.describe GraphQL::Derivation::DerivableInputObject do
         nil
       end
 
-      expect(input_class.arguments.keys).to contain_exactly('title')
+      # `own_arguments` is graphql-ruby's raw registry and NOT a lazy hook,
+      # so it shows what was registered without re-triggering resolution.
+      expect(input_class.own_arguments.keys).to contain_exactly('title')
     end
   end
 

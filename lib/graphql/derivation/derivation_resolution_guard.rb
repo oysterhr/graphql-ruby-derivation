@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'monitor'
+
 module GraphQL
   module Derivation
     # Shared cycle detection for `derive_from` resolution, spanning BOTH
@@ -17,16 +19,27 @@ module GraphQL
     # keyed by action name string); this one detects cycles in the
     # class-derivation graph (`derive_from` sources, keyed by class). Merging
     # them would conflate two different kinds of nodes/graphs.
+    #
+    # Resolution is also serialized here. Derivations resolve lazily, on the
+    # first graphql-ruby read of a class (see the mixins), and that first read
+    # can happen on any request thread. A single process-wide re-entrant
+    # `Monitor` makes the whole resolution (including the recursive
+    # source-first resolution of a chain) one critical section: a second
+    # thread reading the same class blocks until the first finishes, then
+    # sees the class fully resolved. One process-wide lock, rather than one
+    # per class, is what keeps two threads that start at opposite ends of the
+    # same chain from deadlocking on each other's class lock.
     module DerivationResolutionGuard
+      @in_progress = []
+      @monitor = Monitor.new
+
       class << self
         # @return [Array<Class>] classes whose `resolve_derivation!` is
         #   currently on the call stack, in call order. Empty outside of an
         #   active resolution -- each `guard` call pops its entry via
         #   `ensure`, so this naturally drains back to empty once the
         #   outermost `resolve_derivation!` call returns, even after a raise.
-        def in_progress
-          @in_progress ||= []
-        end
+        attr_reader :in_progress
 
         # Wraps a single class's derivation resolution. Raises
         # `GraphQL::Derivation::CyclicDependencyError` if +klass+ is already
@@ -34,14 +47,28 @@ module GraphQL
         # through one or more `derive_from` sources) instead of silently
         # reading a partially-resolved (or entirely empty) source.
         def guard(klass)
-          raise_cyclic_dependency_error(klass) if in_progress.include?(klass)
+          @monitor.synchronize do
+            raise_cyclic_dependency_error(klass) if in_progress.include?(klass)
 
-          in_progress.push(klass)
-          begin
-            yield
-          ensure
-            in_progress.pop
+            in_progress.push(klass)
+            begin
+              yield
+            ensure
+              in_progress.pop
+            end
           end
+        end
+
+        # True when the CURRENT thread is mid-resolution of +klass+. The lazy
+        # read hooks use this to tell a re-entrant read apart from a first
+        # read: resolving a derivation reads the class's own pre-existing
+        # members (and graphql-ruby's `add_field` reads them again), and those
+        # reads must fall straight through to graphql-ruby rather than start a
+        # second resolution. The owner check matters: for ANOTHER thread the
+        # same class is simply not resolved yet, so its read must block on
+        # `guard` and wait, not skip ahead and observe a half-registered set.
+        def resolving?(klass)
+          @monitor.mon_owned? && in_progress.include?(klass)
         end
 
         private

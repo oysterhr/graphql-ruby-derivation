@@ -138,7 +138,9 @@ RSpec.describe GraphQL::Derivation::DerivableObjectType do
         nil
       end
 
-      expect(object_class.fields.keys).to contain_exactly('title')
+      # `own_fields` is graphql-ruby's raw registry and NOT a lazy hook, so
+      # it shows what was registered without re-triggering resolution.
+      expect(object_class.own_fields.keys).to contain_exactly('title')
     end
 
     it 'uses plural phrasing when more than one inline field collides with a derived one' do

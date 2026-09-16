@@ -23,6 +23,7 @@ module GraphQL
           super
           included_classes << base
           base.extend(ClassMethods)
+          base.extend(SingleInputArgumentHooks) if base.respond_to?(:dummy)
         end
 
         # SPEC.md §6.3: resolves every pending derivation across every class
@@ -246,6 +247,24 @@ module GraphQL
         def register_derived_argument(argument)
           argument.instance_variable_set(:@owner, self)
           add_argument(argument)
+          mirror_into_input_type(argument)
+        end
+
+        # A `RelayClassicMutation` host does not expose its arguments
+        # directly: graphql-ruby wraps them in a generated `<Name>Input` type
+        # (`HasSingleInputArgument`) and its `argument` DSL override copies
+        # every declared argument into that type. `add_argument` above
+        # bypasses the override, so without this the derived arguments would
+        # sit on the mutation class and never reach the type a request is
+        # actually validated against. Reading `input_type` here may generate
+        # it for the first time -- in which case graphql-ruby's own snapshot
+        # of `all_argument_definitions` already contains +argument+, hence
+        # the `key?` guard against registering it twice.
+        def mirror_into_input_type(argument)
+          return unless respond_to?(:input_type)
+
+          generated = input_type
+          generated.add_argument(argument) unless generated.own_arguments.key?(argument.graphql_name)
         end
 
         # PR #11 review (khamusa) questioned whether this restriction should
@@ -292,6 +311,23 @@ module GraphQL
           raise GraphQL::Derivation::ConfigurationError,
             "derive_from on #{self} collides with inline argument(s) already declared: " \
             "#{collisions.inspect}"
+        end
+      end
+
+      # Extra read hook for `RelayClassicMutation` hosts
+      # (`GraphQL::Schema::HasSingleInputArgument`). graphql-ruby never reads
+      # such a mutation's `arguments` directly; schema build, validation and
+      # execution all go through `field_arguments` / `get_field_argument` /
+      # `all_field_argument_definitions`, and every one of those is served
+      # by the memoized `dummy` resolver, which is built around `input_type`.
+      # Hooking `dummy` is therefore the one place that catches the first
+      # real read while staying out of the class-body DSL (`argument` reads
+      # `input_type`, not `dummy`, so declaring members still never triggers
+      # a resolution). Extended only onto hosts that actually define `dummy`.
+      module SingleInputArgumentHooks
+        def dummy
+          resolve_pending_derivations_in_ancestry!
+          super
         end
       end
     end

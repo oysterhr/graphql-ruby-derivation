@@ -389,5 +389,73 @@ RSpec.describe 'Lazy derivation resolution on first use' do
       expect(sdl).to match(/input #{update_input_name} \{\s+title: String!\s+\}/)
     end
   end
+
+  describe 'RelayClassicMutation host' do
+    let(:mutation) do
+      Class.new(GraphQL::Schema::RelayClassicMutation) do
+        include GraphQL::Derivation::DerivableInputObject
+
+        graphql_name 'LazyCreateExpense'
+
+        # One inline argument on each side of `derive_from`: the one before
+        # forces graphql-ruby to generate the `<Name>Input` type early, the
+        # one after checks that declaring it does not trigger resolution.
+        argument :before_arg, String, required: false
+        derive_from(FixtureSchema::ExpenseType) { |pick| pick.required(:title) }
+        argument :after_arg, String, required: false
+
+        field :echo, String, null: true
+
+        def resolve(title:, before_arg: nil, after_arg: nil)
+          {echo: [before_arg, title, after_arg].compact.join('|')}
+        end
+      end
+    end
+    let(:schema) do
+      mutation_class = mutation
+      query_type = Class.new(GraphQL::Schema::Object) do
+        graphql_name 'Query'
+        field :ok, GraphQL::Types::Boolean, null: false
+      end
+      mutation_type = Class.new(GraphQL::Schema::Object) do
+        graphql_name 'Mutation'
+        field :create_expense, mutation: mutation_class
+      end
+      build_schema(query_type, mutation_type: mutation_type)
+    end
+
+    it 'includes the derived argument in the generated Input type in the SDL' do
+      expect(schema.to_definition).to match(
+        /input LazyCreateExpenseInput \{.*afterArg: String.*beforeArg: String.*title: String!.*\}/m,
+      )
+    end
+
+    it 'accepts the derived argument on the first mutation request' do
+      result = schema.execute(
+        'mutation { createExpense(input: {beforeArg: "b", title: "Lunch", afterArg: "a"}) { echo } }',
+      )
+
+      expect(result.to_h).to eq('data' => {'createExpense' => {'echo' => 'b|Lunch|a'}})
+    end
+
+    it 'registers each derived argument exactly once when the Input type is first generated during resolution' do
+      # No inline `argument` before `derive_from`, so nothing has generated
+      # the Input type yet when the derivation runs: graphql-ruby's own
+      # snapshot then already carries the derived argument, and the mirror
+      # must not add it a second time (which would turn it into an
+      # ambiguous multi-definition array).
+      derive_only = Class.new(GraphQL::Schema::RelayClassicMutation) do
+        include GraphQL::Derivation::DerivableInputObject
+
+        graphql_name 'LazyDeriveOnlyExpense'
+        derive_from(FixtureSchema::ExpenseType) { |pick| pick.required(:title) }
+        field :echo, String, null: true
+      end
+
+      derive_only.dummy
+
+      expect(derive_only.input_type.own_arguments['title']).to be_a(GraphQL::Schema::Argument)
+    end
+  end
 end
 # rubocop:enable RSpec/DescribeClass

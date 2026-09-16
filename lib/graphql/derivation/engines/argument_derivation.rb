@@ -158,7 +158,8 @@ module GraphQL
         # `pick.override` already wins over the derived `required:` -- only
         # `required:` itself is never touched by `source_options`, since
         # requiredness is the pick block's own job (SPEC.md §4.4).
-        opts = {required: required}.merge(source_options(candidate, required: required)).merge(argument_opts)
+        opts = {required: required}.merge(source_options(candidate)).merge(argument_opts)
+        check_deprecated_required!(name, opts)
 
         argument = GraphQL::Schema::Argument.new(name, type, owner: nil, **opts)
         # An explicit `pick.override(name, validates: ...)` already built its
@@ -177,18 +178,20 @@ module GraphQL
       # `transplant_validators`, since graphql-ruby has already compiled it
       # into `Validator` instances by the time we can read it back -- there is
       # no raw config hash left to re-pass as `validates:`.
-      def source_options(candidate, required:)
+      #
+      # `deprecation_reason:` is copied unconditionally here (even when
+      # `required` would make it illegal) -- `check_deprecated_required!`,
+      # called after this and after `overrides` has had its say, is what
+      # decides whether that combination is actually a problem, since an
+      # explicit `pick.override(name, deprecation_reason: nil)` can still
+      # legitimately cancel it out before that check runs.
+      def source_options(candidate)
         argument = source_argument(candidate)
         return {} unless argument
 
         opts = {prepare: argument.prepare, description: argument.description}
         opts[:default_value] = argument.default_value if argument.default_value?
-        # graphql-ruby forbids a deprecated required argument (validated in
-        # `Argument#deprecation_reason=`), so a deprecation_reason is only
-        # copied when the derived argument stays optional -- otherwise a
-        # source field that is optional-and-deprecated would start raising
-        # the moment a pick block re-controls it with `pick.required`.
-        opts[:deprecation_reason] = argument.deprecation_reason if argument.deprecation_reason && !required
+        opts[:deprecation_reason] = argument.deprecation_reason if argument.deprecation_reason
         opts
       end
 
@@ -196,22 +199,65 @@ module GraphQL
         candidate.argument if candidate.respond_to?(:argument)
       end
 
+      # khamusa's PR #46 review: silently dropping a picked argument's
+      # `deprecation_reason:` because `pick.required` made it non-null (this
+      # method's previous behavior) hid a real, load-bearing fact about the
+      # source argument from whoever reads the derived one. graphql-ruby
+      # itself forbids a deprecated required argument ("Required arguments
+      # cannot be deprecated"), so the combination needs an explicit
+      # decision from the caller, not a silent one made for them: either
+      # `pick.optional` (keep the deprecation), or an explicit
+      # `pick.override(name, deprecation_reason: nil)` (deliberately drop
+      # it) -- either way the pick block, not `source_options`, records the
+      # decision. `opts` is inspected after the `overrides` merge, so an
+      # override that already cleared `deprecation_reason:` is invisible
+      # here and never raises.
+      def check_deprecated_required!(name, opts)
+        return unless opts[:required] && opts[:deprecation_reason]
+
+        raise GraphQL::Derivation::ConfigurationError,
+          "#{name.inspect} is deprecated on its source argument " \
+          "(deprecation_reason: #{opts[:deprecation_reason].inspect}), but pick.required marks " \
+          'it non-null -- graphql-ruby forbids a deprecated required argument. Use ' \
+          "pick.optional(#{name.inspect}) to keep the deprecation, or " \
+          "pick.override(#{name.inspect}, deprecation_reason: nil) to explicitly drop it."
+      end
+
       # `validates:` can't be forwarded as a build option (see
       # `source_options`), so the source argument's already-compiled
       # `Validator` instances are transplanted directly onto the derived
       # argument instead -- the same "no public setter exists" exception
       # `register_derived_argument` already relies on for `@owner`
-      # (`derivable_input_object.rb`). `dup`ed rather than shared: `validates`
-      # (`HasValidators#validates`) appends to `@own_validators` in place, so
+      # (`derivable_input_object.rb`). Each validator is `dup`ed (`validates`
+      # / `HasValidators#validates` appends to `@own_validators` in place, so
       # a shared array would let a later `pick.override(name, validates:
-      # ...)` on the derived argument mutate the source argument's own list.
+      # ...)` on the derived argument mutate the source argument's own list)
+      # and its `@validated` rebound to the derived argument -- otherwise a
+      # validation failure would interpolate the SOURCE argument's
+      # `graphql_name` into `%{validated}` (`Validator.validate!`), not the
+      # derived one, even though it is the derived argument the client
+      # actually sees the error for.
+      #
+      # `AllValidator` is a container: it wraps its own sub-validators (one
+      # per key under `validates: { all: {...} }`), each built with the SAME
+      # `validated:` as the `AllValidator` itself, and stored in its own
+      # `@validators` ivar. A shallow `dup` of an `AllValidator` copies that
+      # ivar by reference, so its sub-validators would keep pointing at the
+      # source argument even after the outer validator is rebound. No
+      # fixture in this gem's test suite currently exercises `validates: {
+      # all: {...} }` through a derivation, so this is left as a known gap
+      # rather than a fix guessed at blind -- flagged here for whoever adds
+      # that coverage next, rather than silently mishandled.
       def transplant_validators(argument, source)
         return unless source
 
         validators = source.validators
         return if validators.empty?
 
-        argument.instance_variable_set(:@own_validators, validators.dup)
+        rebound = validators.map do |validator|
+          validator.dup.tap { |copy| copy.instance_variable_set(:@validated, argument) }
+        end
+        argument.instance_variable_set(:@own_validators, rebound)
       end
 
       def resolve_type(name, candidate, overrides)
@@ -239,6 +285,7 @@ module GraphQL
         :build_argument,
         :source_options,
         :source_argument,
+        :check_deprecated_required!,
         :transplant_validators,
         :resolve_type
     end

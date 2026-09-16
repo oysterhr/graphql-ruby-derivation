@@ -30,6 +30,15 @@ class CreateExpenseInput < GraphQL::Schema::InputObject
   end
 
   argument :receipt_id, GraphQL::Types::ID, required: true
+
+  # `prepare: :strip` names a method graphql-ruby calls on the argument's
+  # owner at coercion time -- for an InputObject argument, that's the
+  # InputObject instance itself. `CreateExpenseInput` must define it,
+  # regardless of whether the Symbol came from an inline `argument` or, as
+  # here, from `pick.override`. See "`prepare:` — Symbol vs. lambda" below.
+  def strip(value)
+    value.strip
+  end
 end
 ```
 
@@ -182,6 +191,38 @@ If your app reloads classes in dev/test, wire cache-clearing through the Rails r
 
 Passing an option outside these lists raises `ConfigurationError` immediately, with a
 "did you mean" suggestion for likely typos.
+
+### `prepare:` — Symbol vs. lambda
+
+A source argument's `prepare:` (Symbol or lambda) carries across when `derive_from`/
+`arguments_from` picks that argument, the same as `description:`/`default_value:`/etc. Derivation
+does not change how `prepare:` itself resolves at request time, so the same Symbol-vs-lambda
+contract graphql-ruby always had still applies -- but it is easy to miss once the argument moves
+to a different class:
+
+- **A lambda** (`prepare: ->(value, context) { ... }`) carries its own body, so it resolves the
+  same way no matter which class the argument ends up derived onto.
+- **A Symbol** (`prepare: :method_name`) names an instance method graphql-ruby calls on the
+  argument's owner at coercion time -- for an InputObject argument, that is the InputObject
+  instance itself, not the source the Symbol was originally declared on. When a Symbol `prepare:`
+  carries across to a new target class, THAT class must define its own instance method with the
+  same name, or coercion raises `Could not find prepare method` the first time a client sends the
+  argument -- derivation has no way to check this at load time, since the method is looked up at
+  request time, on an instance. If a picked argument's `prepare:` needs to work on more than one
+  target (or a target that cannot guarantee the method), pass a lambda instead of a Symbol.
+
+### `deprecation_reason:` and `pick.required`
+
+graphql-ruby forbids a deprecated required argument ("Required arguments cannot be deprecated").
+If a picked argument's source has a `deprecation_reason:` and the pick block selects it with
+`pick.required`, derivation raises `ConfigurationError` immediately instead of silently dropping
+the deprecation reason to keep the argument non-null. Resolve it explicitly, whichever is
+actually true for the derived argument:
+
+- `pick.optional(name)` -- keep the deprecation, so the derived argument stays nullable, same as
+  the source.
+- `pick.override(name, deprecation_reason: nil)` -- state that the derived argument is not
+  deprecated, so it may stay (or become) required.
 
 ## Error glossary
 

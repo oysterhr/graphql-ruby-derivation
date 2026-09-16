@@ -297,14 +297,59 @@ def resolve(source, pick_block, context: nil)
   pick.selections.map do |name, (required, overrides)|
     candidate = candidates[name]
     type = candidate.type  # already mapped in enumerate step
-    opts = { required: required }.merge(overrides)
-    build_argument(name, type, **opts)
+
+    # `candidate.argument`, when present (InputObject, Mutation, and Symbol
+    # sources; not an ObjectType-field candidate, which has no source
+    # Argument to read from), is the source's own already-built
+    # GraphQL::Schema::Argument -- its option metadata (below) carries
+    # across BEFORE `overrides`, so an explicit pick.override always wins.
+    opts = { required: required }
+      .merge(source_options(candidate.argument))
+      .merge(overrides)
+
+    # graphql-ruby forbids a deprecated required argument. Rather than
+    # silently drop `deprecation_reason:` to keep `required: true` legal,
+    # raise ConfigurationError -- the caller must choose explicitly, either
+    # pick.optional(name) or pick.override(name, deprecation_reason: nil).
+    raise ConfigurationError if opts[:required] && opts[:deprecation_reason]
+
+    argument = build_argument(name, type, **opts)
+    transplant_validators(argument, candidate.argument) unless overrides.key?(:validates)
+    argument
   end
+end
+
+# Reads back the source argument's own option metadata: `prepare:`,
+# `description:`, `default_value:` (only if the source has one configured),
+# and `deprecation_reason:`. `validates:` is excluded here -- see
+# `transplant_validators` below.
+def source_options(source_argument)
+  ...
+end
+
+# `validates:` cannot be read back as a raw config hash -- graphql-ruby has
+# already compiled it into `Validator` instances by the time an argument
+# exists. Instead, the source argument's own `Validator` instances are
+# `dup`'d directly onto the derived argument, each with its `@validated`
+# rebound to the DERIVED argument (not the source), so a validation failure
+# on the derived argument reports the derived argument's own name.
+def transplant_validators(argument, source_argument)
+  ...
 end
 ```
 
 `build_argument` constructs a `GraphQL::Schema::Argument` instance without registering it. The
 caller registers it on the target InputObject.
+
+**Symbol `prepare:` carries a request-time contract, not just a value.** A Symbol `prepare:`
+names an instance method graphql-ruby calls on the argument's owner at coercion time (for an
+InputObject argument, the InputObject instance itself), looked up only when a client actually
+sends the argument -- derivation has no way to verify at load time that the method exists. When a
+Symbol `prepare:` is picked onto a new target class, that target must define its own instance
+method with the same name, or coercion raises `Could not find prepare method` at request time. A
+lambda `prepare:` has no such requirement -- it carries its own body and resolves the same way
+regardless of which class the argument ends up on. See `USAGE.md`'s "`prepare:` — Symbol vs.
+lambda" for the request-facing version of this note.
 
 ---
 
@@ -400,6 +445,12 @@ class CreateExpenseInput < GraphQL::Schema::InputObject
   end
 
   argument :receipt_id, GraphQL::Types::ID, required: true
+
+  # Required because `prepare:` is a Symbol here -- see §4.4's note on
+  # Symbol `prepare:`'s request-time contract.
+  def strip(value)
+    value.strip
+  end
 end
 ```
 

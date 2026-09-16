@@ -372,9 +372,18 @@ module GraphQL
           # cleanly at declaration time. Checked explicitly, before the
           # `argument key, nested, ...` call that would otherwise silently
           # overload rather than collide.
+          #
+          # Reads `own_arguments`, not `arguments`: this runs in the middle of
+          # the controller class body, and `arguments` is a lazy-resolution
+          # hook on the generated InputObject. Resolving here would evaluate
+          # an `arguments_from` source before the class body is finished --
+          # a Symbol sibling declared further down would not be registered
+          # yet. `own_arguments` is exactly the inline declarations, which is
+          # all this check is about (a derived-vs-`resource_arguments` clash
+          # is caught later by `DerivableInputObject`'s own collision check).
           def check_resource_key_collision!(input_object, key)
             graphql_name = key.camelize(:lower)
-            return unless input_object.arguments.key?(graphql_name)
+            return unless input_object.own_arguments.key?(graphql_name)
 
             raise GraphQL::Derivation::ConfigurationError,
               "resource_arguments #{key.inspect} collides with an argument already declared " \
@@ -388,8 +397,12 @@ module GraphQL
             # Symbol (sibling) sources ARE valid here: the controller class is
             # the registry that resolves them (SPEC.md §4.2). Opt in before
             # deriving so DerivableInputObject's §11.1 rejection does not fire
-            # on the auto-generated InputObject.
-            input_object.send(:allow_sibling_sources!) if source.is_a?(Symbol)
+            # on the auto-generated InputObject, and hand it the controller
+            # class as its default resolver so a lazy first read (e.g.
+            # `ArgumentSchema#to_definition`, or graphql-ruby coercing a
+            # request) can resolve the sibling without this concern driving
+            # the call.
+            input_object.send(:allow_sibling_sources!, self) if source.is_a?(Symbol)
             input_object.derive_from(source, &block)
           end
 

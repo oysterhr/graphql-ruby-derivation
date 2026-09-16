@@ -8,12 +8,43 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Lazy resolution on first use. A pending `derive_from` now resolves the first time graphql-ruby
+  reads the class: `DerivableInputObject` hooks `arguments`, `get_argument`,
+  `all_argument_definitions` and `any_arguments?` (plus `dummy` on a `RelayClassicMutation`
+  host), `DerivableObjectType` hooks `fields`, `get_field` and `all_field_definitions`. Those are
+  the paths schema build, SDL dump, introspection, validation and execution actually go
+  through, under both the legacy `Warden` and `GraphQL::Schema::Visibility`, so derived
+  arguments/fields appear on the very first request with no `resolve_all!` and no
+  `Schema.execute` hook. The hooks also resolve every Derivable ancestor, so a Ruby subclass of
+  a derivable type gets its parent's derived members. Declaring inline members never triggers a
+  resolution, so declaration order in the class body does not matter. `resolve_all!` is
+  unchanged and still useful as an eager warm-up that fails at boot instead of on first use.
+- Derived arguments on a `RelayClassicMutation` host are now mirrored into the generated
+  `<Name>Input` type, the same way graphql-ruby mirrors inline `argument` declarations.
+  Previously they were registered on the mutation class only and never reached the type a
+  request is validated against.
+- Resolution is now serialized behind a process-wide re-entrant lock shared with the cycle
+  guard (`DerivationResolutionGuard`), so a first read on a request thread is safe: a second
+  thread reading the same class waits, then sees it fully resolved. Resolving one chain from
+  both ends concurrently cannot deadlock (one lock, not one per class).
+- Controller-generated InputObjects remember their controller class as the sibling-resolver
+  context, so a lazy first read of one with an `arguments_from :sibling` source (e.g.
+  `ArgumentSchema#to_definition`) resolves without `ControllerConcern` driving the call.
+
 - `CONTRIBUTING.md`, per Oyster's OSS release policy's "Release Requirements" (README must
   document contribution guidelines; a `CONTRIBUTING.md`, if applicable, should be included).
   Human-oriented; points to `AGENTS.md` for full process detail.
 
 ### Changed
 
+- A derivation that raises (collision, cycle, failing pick block) is no longer remembered as
+  attempted: it stays pending and the next read, lazy or explicit, raises again. A misconfigured
+  class therefore stays loud on every access instead of surfacing the error once and then
+  quietly serving only its inline members.
+- `resolve_pending_derivation!` reads the pre-existing member names via
+  `all_argument_definitions` / `all_field_definitions` instead of `arguments.keys` /
+  `fields.keys`, which drops the visibility pass and graphql-ruby's "types must have
+  arguments/fields" warning that a derive-only class used to emit mid-resolution.
 - `GraphQL::Derivation::Rails::ArgumentParsingError` renamed to
   `GraphQL::Derivation::Rails::ArgumentCoercionError` -- "parsing" misnamed the operation; every
   other reference to it in code and docs already says "coercion" (`coerce_input`,

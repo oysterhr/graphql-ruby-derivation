@@ -120,6 +120,68 @@ RSpec.describe GraphQL::Derivation::DerivableInputObject do
     end
   end
 
+  describe 'lazy resolution on first use' do
+    it 'registers derived arguments the first time .arguments is read, without resolve_all!' do
+      input_class = build_input_object_class do
+        derive_from FixtureSchema::ExpenseType do |pick|
+          pick.required(:title, :amount_cents)
+          pick.optional(:description)
+        end
+      end
+
+      # No resolve_all! / resolve_derivation! -- reading .arguments must resolve.
+      expect(input_class.arguments.keys).to contain_exactly('title', 'amountCents', 'description')
+    end
+
+    it 'does not re-run the pick block on repeated .arguments reads' do
+      call_count = 0
+      input_class = build_input_object_class do
+        derive_from FixtureSchema::ExpenseType do |pick|
+          call_count += 1
+          pick.required(:title)
+        end
+      end
+
+      input_class.arguments
+      input_class.arguments
+
+      expect(call_count).to eq(1)
+    end
+
+    it 'surfaces a collision on the first .arguments read' do
+      input_class = build_input_object_class do
+        derive_from FixtureSchema::ExpenseType do |pick|
+          pick.required(:title)
+        end
+
+        argument :title, String, required: true
+      end
+
+      expect { input_class.arguments }.to raise_error(GraphQL::Derivation::ConfigurationError, /title/)
+    end
+
+    it 'keeps raising on every later .arguments read while the collision is unfixed' do
+      input_class = build_input_object_class do
+        derive_from FixtureSchema::ExpenseType do |pick|
+          pick.required(:title)
+        end
+
+        argument :title, String, required: true
+      end
+
+      begin
+        input_class.arguments
+      rescue GraphQL::Derivation::ConfigurationError
+        nil
+      end
+
+      # A failed resolution must not be remembered as "done": a type that
+      # quietly served only its inline arguments after one error would hide
+      # the misconfiguration from every later request.
+      expect { input_class.arguments }.to raise_error(GraphQL::Derivation::ConfigurationError, /title/)
+    end
+  end
+
   describe 'collision detection (§10.4 integration)' do
     it 'raises ConfigurationError at resolution time when an inline argument collides with a derived one' do
       input_class = build_input_object_class do
@@ -150,7 +212,9 @@ RSpec.describe GraphQL::Derivation::DerivableInputObject do
         nil
       end
 
-      expect(input_class.arguments.keys).to contain_exactly('title')
+      # `own_arguments` is graphql-ruby's raw registry and NOT a lazy hook,
+      # so it shows what was registered without re-triggering resolution.
+      expect(input_class.own_arguments.keys).to contain_exactly('title')
     end
   end
 

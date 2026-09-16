@@ -406,10 +406,12 @@ end
 ### 6.2 Behaviour
 
 - `derive_from` may be called at most once per class. A second call raises `ConfigurationError`.
-- The derivation is stored unevaluated. Resolution fires when the owning schema is first loaded
-  (via `lazy_resolve_derivations!` — see §6.3).
+- The derivation is stored unevaluated. Resolution fires lazily, the first time graphql-ruby
+  reads the class's arguments (see §6.3), or earlier if `resolve_all!` is called.
 - Resolved arguments are registered on the InputObject class via `argument` as if declared
-  inline. They appear in introspection like any other argument.
+  inline. They appear in introspection like any other argument. On a `RelayClassicMutation`
+  host they are also mirrored into the generated `<Name>Input` type, the same way graphql-ruby
+  mirrors inline `argument` declarations.
 - Inline `argument` declarations may coexist with `derive_from`. If an inline `argument` names
   a field also present in the derivation, `ConfigurationError` is raised at resolution time.
 - If the `derive_from` source is itself Derivable (another `DerivableInputObject` or
@@ -422,10 +424,33 @@ end
 
 ### 6.3 Resolution Trigger
 
-`GraphQL::Derivation::DerivableInputObject.resolve_all!` iterates all classes that include the mixin
-and resolves any pending derivations. Callers:
-- The Rails plugin calls this during `ArgumentSchema` initialisation (see §8.2).
-- Outside Rails, the schema author calls it explicitly, typically in a schema initialiser or
+A pending derivation resolves **on first use**: the mixin hooks the class-level read API
+graphql-ruby goes through for every purpose (`arguments`, `get_argument`,
+`all_argument_definitions`, `any_arguments?`, and `dummy` on a `RelayClassicMutation` host).
+Schema build, SDL dump, introspection, static validation, variable validation and coercion all
+reach one of these before they look at any argument, so the derived arguments are in place for
+the first request with no explicit call. The hooks resolve every Derivable class in the
+ancestry, so a plain Ruby subclass of a derivable class triggers its parent's derivation too.
+Declaring members in the class body (`argument`, `field`) never triggers a resolution -- only
+reads do -- so a class may declare `derive_from` before its inline members, and a source that
+is not loaded yet is not touched until something actually reads the class.
+
+Resolution is serialized behind one process-wide re-entrant lock (shared with the cycle guard,
+§6.2), so a first read that happens on a request thread is safe: a second thread reading the
+same class blocks until the first finishes, then sees it fully resolved. A resolution that
+raises (a collision, a cycle, a pick block that fails) leaves the derivation pending; the next
+read runs it again and raises again, so a misconfiguration stays visible on every access
+rather than surfacing once and then serving the class with its derived arguments missing.
+
+`GraphQL::Derivation::DerivableInputObject.resolve_all!` iterates all classes that include the
+mixin and resolves any pending derivations eagerly. It is optional: use it as a warm-up so a
+misconfiguration fails at boot (or in CI) instead of on the first request that touches the
+class. Callers:
+- The Rails plugin's `ControllerConcern` resolves its generated InputObjects explicitly, with
+  the controller class as sibling-resolver context (see §8.1); a lazy first read of one of
+  those InputObjects (e.g. `ArgumentSchema#to_definition`) uses the same controller class,
+  remembered at declaration time.
+- Outside Rails, the schema author may call it explicitly, typically in a schema initialiser or
   test helper.
 
 **Rails dev-environment note:** in a Rails app with class reloading enabled (dev/test --
@@ -479,8 +504,8 @@ end
 ### 7.2 Behaviour
 
 - `derive_from` may be called at most once per class. A second call raises `ConfigurationError`.
-- The derivation is stored unevaluated. Resolution fires when the owning schema is first loaded
-  (via `lazy_resolve_derivations!`).
+- The derivation is stored unevaluated. Resolution fires lazily, the first time graphql-ruby
+  reads the class's fields (see §7.3), or earlier if `resolve_all!` is called.
 - Resolved fields are registered on the ObjectType class via `field` as if declared inline.
 - Inline `field` declarations may coexist with `derive_from`. If an inline `field` names a
   field also produced by the derivation, `ConfigurationError` is raised at resolution time.
@@ -491,8 +516,11 @@ end
 
 ### 7.3 Resolution Trigger
 
-`GraphQL::Derivation::DerivableObjectType.resolve_all!` — same pattern as §6.3. Called during schema
-load or explicitly by the schema author.
+Same model as §6.3: a pending derivation resolves on the first graphql-ruby read of the class's
+fields (`fields`, `get_field`, `all_field_definitions`), for the class itself or any Ruby
+subclass of it; resolution is serialized behind the same lock, and a failed resolution stays
+pending and re-raises on the next read. `GraphQL::Derivation::DerivableObjectType.resolve_all!`
+is the optional eager warm-up, called explicitly by the schema author.
 
 **Rails dev-environment note:** same guidance as §6.3 -- in dev/test with class reloading
 enabled, drive this from `Rails.application.reloader.to_prepare { ... }`, not a one-shot

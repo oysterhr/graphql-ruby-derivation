@@ -31,8 +31,6 @@ class CreateExpenseInput < GraphQL::Schema::InputObject
 
   argument :receipt_id, GraphQL::Types::ID, required: true
 end
-
-GraphQL::Derivation::DerivableInputObject.resolve_all! # triggers derivation (see "Resolution timing" below)
 ```
 
 `CreateExpenseInput` now has `title`/`expense_date`/`category` (required), `description`
@@ -71,8 +69,6 @@ class TeamMemberExpenseType < GraphQL::Schema::Object
 
   field :team_member_notes, String, null: true
 end
-
-GraphQL::Derivation::DerivableObjectType.resolve_all!
 ```
 
 ## Example 3 — derive ObjectType fields from an ActiveRecord model
@@ -147,13 +143,25 @@ whole nested key is optional) and flat/nested declarations may be freely mixed o
 
 ## Resolution timing
 
-`derive_from`/`arguments_from` blocks are stored **unevaluated** at declaration time and only
-evaluated once, on resolution. Outside Rails, call `resolve_all!` yourself (schema
-initializer or test helper). Inside Rails, the plugin resolves lazily on first use, but if your
-app reloads classes in dev/test, wire re-resolution and cache-clearing through the Rails
-reloader — see `docs/SPEC.md` §6.3/§7.3/§8.2 for the exact hooks
-(`Rails.application.reloader.to_prepare` / `before_class_unload` +
-`GraphQL::Derivation::Rails.reset_for_reload!`).
+`derive_from`/`arguments_from` blocks are stored **unevaluated** at declaration time and
+evaluated once, **on first use**: the first time graphql-ruby reads the class's arguments or
+fields (schema build, SDL dump, introspection, validation, execution -- under both the legacy
+`Warden` and `GraphQL::Schema::Visibility`). Nothing needs to be called for the derived members
+to appear, and declaring inline `argument`/`field` members never triggers a resolution, so the
+order of declarations in the class body does not matter. Resolution is serialized behind one
+process-wide lock, so a first read on a request thread is safe.
+
+`GraphQL::Derivation::DerivableInputObject.resolve_all!` and
+`GraphQL::Derivation::DerivableObjectType.resolve_all!` are optional eager warm-ups: call them
+from a schema initializer, a Rails `to_prepare` block or a test helper when you want a
+misconfiguration (a collision, a cycle) to fail at boot or in CI instead of on the first request
+that touches the class. A failed resolution is not remembered as done -- the next read runs it
+again and raises again -- so a misconfigured class stays loud rather than quietly serving only
+its inline members.
+
+If your app reloads classes in dev/test, wire cache-clearing through the Rails reloader — see
+`docs/SPEC.md` §6.3/§7.3/§8.2 for the exact hooks (`Rails.application.reloader.before_class_unload`
++ `GraphQL::Derivation::Rails.reset_for_reload!`).
 
 ## Pick DSL cheat sheet
 

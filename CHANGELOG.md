@@ -53,6 +53,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- `derive_from` (via `pick.required`/`pick.optional`) no longer drops a picked argument's own
+  option metadata. `ArgumentDerivation#build_argument` used to build the derived argument from
+  only `{required:}` plus any `pick.override` opts, discarding everything else the source
+  `GraphQL::Schema::Argument` was declared with. A derived argument now also carries across the
+  source's `prepare:`, `description:`, `default_value:` (when configured), `validates:`, and
+  `deprecation_reason:`. An explicit `pick.override(name, **opts)` still wins over any of these,
+  and `required:` itself is still controlled solely by `pick.required`/`pick.optional`, exactly as
+  before. Applies to InputObject, Mutation, and Symbol (sibling action) sources -- not to
+  ObjectType-field sources, whose candidates come from `GraphQL::Schema::Field`, which has no
+  `prepare:`/`validates:` equivalent to carry.
+  - If the source argument is deprecated and `pick.required` would make the derived argument
+    non-null, `derive_from` raises `ConfigurationError` instead of silently dropping
+    `deprecation_reason:` -- graphql-ruby forbids a deprecated required argument, and the caller
+    must choose explicitly between `pick.optional(name)` (keep the deprecation) and
+    `pick.override(name, deprecation_reason: nil)` (state that the derived argument is not
+    deprecated).
+  - `validates:` is carried by transplanting the source argument's own compiled `Validator`
+    instances onto the derived argument (there is no raw config hash left to re-read once
+    graphql-ruby has built them), with each validator's `@validated` rebound to the derived
+    argument so a validation error names the derived argument, not the source's.
+  - A Symbol `prepare:` carries across as-is; since graphql-ruby resolves a Symbol `prepare:`
+    against the argument's owner at request time, the TARGET class (not the source) must define
+    an instance method with that name, or coercion raises `Could not find prepare method` the
+    first time a client sends the argument. See `USAGE.md`'s "`prepare:` — Symbol vs. lambda".
 - `ControllerConcern#arguments` no longer raises `ArgumentCoercionError` ("Field is not defined")
   for Rails routing internals (`controller`, `action`) or any dynamic route segment not declared
   as an argument (e.g. `params[:engagement_id]` on a nested resource route). A real Rails

@@ -6,7 +6,7 @@ RSpec.describe GraphQL::Derivation::Mappers::InputObjectToArgument do
   describe '.candidates' do
     it 'returns a candidate for every argument on the InputObject' do
       expect(candidates.keys).to contain_exactly(
-        :title, :description, :amount_cents, :category, :reimbursable,
+        :title, :description, :amount_cents, :category, :reimbursable, :notes,
       )
     end
 
@@ -26,6 +26,11 @@ RSpec.describe GraphQL::Derivation::Mappers::InputObjectToArgument do
 
     it 'leaves an already-nullable source argument type unwrapped the same way' do
       expect(candidates[:description].type).not_to be_non_null
+    end
+
+    it 'carries the source argument itself, not just its type' do
+      source_argument = FixtureSchema::ExpenseBaseInput.arguments['category']
+      expect(candidates[:category].argument).to equal(source_argument)
     end
 
     context 'with a list-typed source argument' do

@@ -271,6 +271,18 @@ RSpec.describe GraphQL::Derivation::ArgumentDerivation do
 
         expect(title.type).not_to be_non_null
       end
+
+      # A Mutation source shares `InputObjectToArgument` with an InputObject
+      # source, so option metadata carries across the same way (SPEC.md
+      # §4.4). Asserted separately from the InputObject path so a regression
+      # that only affected the Mutation candidate wiring would still be
+      # caught (PR #46 review, friendly-reviewer note).
+      it 'preserves the source argument option metadata' do
+        arguments = resolve(FixtureSchema::CreateExpenseMutation) { |pick| pick.optional(:category) }
+        category = arguments.find { |argument| argument.graphql_name == 'category' }
+
+        expect(category).to have_attributes(prepare: :strip, description: 'Expense category')
+      end
     end
 
     context 'with a Symbol (sibling action) source' do
@@ -281,7 +293,14 @@ RSpec.describe GraphQL::Derivation::ArgumentDerivation do
       # rather than a real controller.
       let(:sibling_resolver) do
         sibling_arguments = [
-          GraphQL::Schema::Argument.new(:title, String, owner: nil, required: true),
+          # `prepare:`/`description:` on `title` let the metadata-preservation
+          # spec below prove a `SiblingCandidate` carries the source argument
+          # itself (not just its type) -- if `sibling_candidates` ever stopped
+          # passing `argument` to `SiblingCandidate.new`, this metadata would
+          # silently drop (PR #46 review, friendly-reviewer note).
+          GraphQL::Schema::Argument.new(
+            :title, String, owner: nil, required: true, prepare: :strip, description: 'Expense title',
+          ),
           GraphQL::Schema::Argument.new(:category, String, owner: nil, required: false),
         ]
         Class.new do
@@ -341,6 +360,20 @@ RSpec.describe GraphQL::Derivation::ArgumentDerivation do
 
       it 're-lists a list-typed sibling argument after unwrapping its element type' do
         expect(tags.type).to have_attributes(list?: true, unwrap: GraphQL::Types::String)
+      end
+
+      # `SiblingCandidate` carries the source argument itself, so option
+      # metadata carries across the same way it does for InputObject and
+      # Mutation sources (SPEC.md §4.4). Asserted separately so a regression
+      # in the sibling wiring would still be caught (PR #46 review,
+      # friendly-reviewer note).
+      it 'preserves the source sibling argument option metadata' do
+        arguments = described_class.resolve(
+          :create, ->(pick) { pick.optional(:title) }, context: sibling_resolver,
+        )
+        title = arguments.find { |argument| argument.graphql_name == 'title' }
+
+        expect(title).to have_attributes(prepare: :strip, description: 'Expense title')
       end
     end
 
@@ -460,6 +493,65 @@ RSpec.describe GraphQL::Derivation::ArgumentDerivation do
         expect(result.to_h.dig('errors', 0, 'message')).to eq('publicTitle is too long (maximum is 5)')
       end
     end
+
+    # `validates: { all: {...} }` (the `AllValidator`) only exists in
+    # graphql-ruby releases newer than this gem's 2.1 floor, so this context
+    # is skipped when run against the `graphql_2.1` gemfile, where declaring
+    # it raises `ArgumentError: unknown validation: :all`.
+    context 'when a transplanted AllValidator fails (validates: { all: {...} })',
+      if: GraphQL::Schema::Validator.const_defined?(:AllValidator) do
+        # PR #46's friendly-reviewer flagged `validates: { all: {...} }` as an
+        # untested gap: the transplanted validator is an `AllValidator` whose
+        # per-element sub-validators a shallow `dup` leaves `@validated`-bound
+        # to the source, suggesting the error message might name the source
+        # argument. On inspection that concern does not hold: a sub-validator's
+        # `@validated` is never read -- it returns its `%{validated}` template
+        # un-interpolated, and `Validator.validate!` fills `%{validated}` from
+        # the TOP-LEVEL validator (the `AllValidator`, whose `@validated`
+        # `transplant_validators` already rebinds). So the derived name is
+        # reported without any recursion (see `transplant_validators`' comment
+        # for the full mechanism). This spec locks that in -- it closes the
+        # coverage gap by exercising `validates: { all: {...} }` through a real
+        # derivation, and (via the `as:` name asymmetry, same as the context
+        # above) still fails if the outer `AllValidator`'s own `@validated`
+        # rebind ever regresses.
+        let(:source) do
+          Class.new(GraphQL::Schema::InputObject) do
+            graphql_name 'AllValidatorRebindSourceInput'
+            argument :internal_tags,
+              [String],
+              required: true,
+              as: :public_tags,
+              validates: {all: {length: {maximum: 5}}}
+          end
+        end
+        let(:target) { build_target_input(source) { |pick| pick.required(:public_tags) } }
+        let(:schema) do
+          # See the previous context's `schema` `let` for why `target` (an
+          # RSpec `let`) is captured into a local variable first.
+          input_type = target
+          Class.new(GraphQL::Schema) do
+            query_type = Class.new(GraphQL::Schema::Object) do
+              graphql_name 'Query'
+
+              field :echo, String, null: true do
+                argument :input, input_type, required: true
+              end
+
+              def echo(**)
+                raise 'unreachable -- validation must fail before the resolver runs'
+              end
+            end
+            query(query_type)
+          end
+        end
+
+        it "reports the DERIVED argument's GraphQL name in the validation error, not the source's" do
+          result = schema.execute('{ echo(input: {publicTags: ["toolong"]}) }')
+
+          expect(result.to_h.dig('errors', 0, 'message')).to eq('publicTags is too long (maximum is 5)')
+        end
+      end
 
     context 'when a Symbol prepare: runs through the target' do
       let(:source) do

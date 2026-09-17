@@ -11,7 +11,12 @@ module FixtureSchema
     argument :title, String, required: true
     argument :description, String, required: false
     argument :amount_cents, Integer, required: true
-    argument :category, String, required: false
+    # `category`'s `prepare:`/`description:` let ArgumentDerivation specs
+    # verify that a Mutation source (which routes through the same
+    # `InputObjectToArgument` mapper as an InputObject source) also carries
+    # the source argument's option metadata across, not just its type
+    # (SPEC.md §4.4).
+    argument :category, String, required: false, prepare: :strip, description: 'Expense category'
 
     field :success, GraphQL::Types::Boolean, null: false
 

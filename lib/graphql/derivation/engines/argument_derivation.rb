@@ -238,16 +238,23 @@ module GraphQL
       # derived one, even though it is the derived argument the client
       # actually sees the error for.
       #
-      # `AllValidator` is a container: it wraps its own sub-validators (one
-      # per key under `validates: { all: {...} }`), each built with the SAME
-      # `validated:` as the `AllValidator` itself, and stored in its own
-      # `@validators` ivar. A shallow `dup` of an `AllValidator` copies that
-      # ivar by reference, so its sub-validators would keep pointing at the
-      # source argument even after the outer validator is rebound. No
-      # fixture in this gem's test suite currently exercises `validates: {
-      # all: {...} }` through a derivation, so this is left as a known gap
-      # rather than a fix guessed at blind -- flagged here for whoever adds
-      # that coverage next, rather than silently mishandled.
+      # `validates: { all: {...} }` (list-element validation) is the one case
+      # worth being explicit about, because it looks like it needs recursion
+      # here and does not. Its top-level validator is an `AllValidator` that
+      # wraps per-element sub-validators in its own `@validators` ivar, each
+      # still `@validated`-bound to the source argument -- and a shallow `dup`
+      # of the `AllValidator` shares that ivar by reference, so those
+      # sub-validators are NOT rebound by the `map` above. That is harmless:
+      # a sub-validator's `@validated` is never read. Sub-validators return
+      # their `%{validated}` message template un-interpolated, and
+      # `Validator.validate!` fills `%{validated}` from the TOP-LEVEL
+      # validator's `@validated` (the `AllValidator`, which the `map` above
+      # does rebind) -- so the derived argument's own name is reported, not
+      # the source's. Verified by the `validates: { all: {...} }` coercion
+      # spec in `argument_derivation_spec.rb`, which reports the derived name.
+      # (If a future graphql-ruby made a sub-validator read its own
+      # `@validated` at validate time, this would need a recursive rebind;
+      # nothing does today.)
       def transplant_validators(argument, source)
         return unless source
 

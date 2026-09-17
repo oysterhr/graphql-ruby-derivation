@@ -276,13 +276,26 @@ module GraphQL
       # `@validators` array with the source, so the array is replaced rather
       # than mutated in place (mutating it would rebind the SOURCE argument's
       # own sub-validators onto the derived argument).
+      #
+      # `AllValidator` (the container behind `validates: { all: {...} }`) only
+      # exists on graphql-ruby versions that support that key -- it is absent
+      # on 2.1 (a CI matrix leg, SPEC.md §12.6) -- so the constant lookup is
+      # guarded with `defined?`, otherwise the reference itself would raise
+      # `NameError` there and break every validator transplant, not just the
+      # `all:` ones. The nested block is `# :nocov:`'d because it is
+      # unreachable on the 2.1 leg (no `AllValidator` to match), and branch
+      # coverage is enforced at 100% on both legs (spec/spec_helper.rb); the
+      # 2.6 leg's AllValidator specs still exercise the behavior.
       def rebind_validator(validator, argument)
         copy = validator.dup
         copy.instance_variable_set(:@validated, argument)
-        if copy.is_a?(GraphQL::Schema::Validator::AllValidator)
+        # :nocov:
+        if defined?(GraphQL::Schema::Validator::AllValidator) &&
+           copy.is_a?(GraphQL::Schema::Validator::AllValidator)
           nested = copy.instance_variable_get(:@validators)
           copy.instance_variable_set(:@validators, nested.map { |sub| rebind_validator(sub, argument) })
         end
+        # :nocov:
         copy
       end
 

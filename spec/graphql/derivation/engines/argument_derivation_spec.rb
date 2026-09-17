@@ -409,6 +409,17 @@ RSpec.describe GraphQL::Derivation::ArgumentDerivation do
       # correct derived name whether or not the nested rebind happened. A
       # message-level spec would pass either way and guard nothing; asserting
       # on the binding is the only way to catch a regression here.
+      #
+      # `validates: { all: {...} }` (and the `AllValidator` it builds) only
+      # exists on newer graphql-ruby -- it is absent on the 2.1 CI matrix leg,
+      # where even declaring the source below raises -- so skip there, the
+      # same way the visibility specs skip on 2.1.
+      before do
+        unless defined?(GraphQL::Schema::Validator::AllValidator)
+          skip 'validates: { all: {...} } is not available on this graphql-ruby version'
+        end
+      end
+
       let(:source) do
         Class.new(GraphQL::Schema::InputObject) do
           graphql_name 'AllValidatorSourceInput'

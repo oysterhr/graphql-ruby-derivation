@@ -393,6 +393,49 @@ RSpec.describe GraphQL::Derivation::ArgumentDerivation do
       end
     end
 
+    context 'with a source argument using validates: { all: {...} } (AllValidator)' do
+      # Finding #2 (Rox / friendly-reviewer PR #46 review): `transplant_validators`
+      # dups each source validator and rebinds its `@validated` to the derived
+      # argument. `AllValidator` holds its sub-validators in a `@validators`
+      # array that a shallow `dup` shares by reference, so those nested
+      # sub-validators must be rebound too (and the source's own must be left
+      # untouched).
+      #
+      # These specs read `@validated` directly instead of driving real
+      # coercion, on purpose -- and that is NOT the "config read, not behavior"
+      # trap khamusa flagged earlier in this file. graphql-ruby 2.6
+      # interpolates `%{validated}` from the OUTER validator only (see
+      # `transplant_validators`'s comment), so a real coercion produces the
+      # correct derived name whether or not the nested rebind happened. A
+      # message-level spec would pass either way and guard nothing; asserting
+      # on the binding is the only way to catch a regression here.
+      let(:source) do
+        Class.new(GraphQL::Schema::InputObject) do
+          graphql_name 'AllValidatorSourceInput'
+          argument :handles, [String], required: false, validates: {all: {length: {maximum: 3}}}
+        end
+      end
+      let(:derived) do
+        arguments = resolve(source) { |pick| pick.optional(:handles) }
+        arguments.find { |argument| argument.graphql_name == 'handles' }
+      end
+
+      it 'rebinds the nested sub-validators @validated to the derived argument' do
+        nested = derived.validators.first.instance_variable_get(:@validators)
+
+        expect(nested.map(&:validated)).to all(equal(derived))
+      end
+
+      it 'leaves the source argument nested sub-validators pointing at the source' do
+        derived # resolve the derivation, which transplants off the source
+
+        source_argument = source.arguments['handles']
+        source_nested = source_argument.validators.first.instance_variable_get(:@validators)
+
+        expect(source_nested.map(&:validated)).to all(equal(source_argument))
+      end
+    end
+
     context 'with an unsupported source type' do
       it 'raises ArgumentError immediately' do
         expect do

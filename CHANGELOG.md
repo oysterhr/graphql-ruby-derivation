@@ -72,7 +72,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - `validates:` is carried by transplanting the source argument's own compiled `Validator`
     instances onto the derived argument (there is no raw config hash left to re-read once
     graphql-ruby has built them), with each validator's `@validated` rebound to the derived
-    argument so a validation error names the derived argument, not the source's.
+    argument so a validation error names the derived argument, not the source's. A
+    `validates: { all: {...} }` builds an `AllValidator` that holds its own nested
+    sub-validators; those are now rebound too, so a transplanted validator keeps no live
+    reference back to the source argument. (In graphql-ruby 2.6 the error message is
+    interpolated from the outer validator only, so this rebind is about the reference itself,
+    not the message text.)
   - A Symbol `prepare:` carries across as-is; since graphql-ruby resolves a Symbol `prepare:`
     against the argument's owner at request time, the TARGET class (not the source) must define
     an instance method with that name, or coercion raises `Could not find prepare method` the

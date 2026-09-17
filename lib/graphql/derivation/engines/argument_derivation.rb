@@ -243,21 +243,47 @@ module GraphQL
       # `validated:` as the `AllValidator` itself, and stored in its own
       # `@validators` ivar. A shallow `dup` of an `AllValidator` copies that
       # ivar by reference, so its sub-validators would keep pointing at the
-      # source argument even after the outer validator is rebound. No
-      # fixture in this gem's test suite currently exercises `validates: {
-      # all: {...} }` through a derivation, so this is left as a known gap
-      # rather than a fix guessed at blind -- flagged here for whoever adds
-      # that coverage next, rather than silently mishandled.
+      # source argument even after the outer validator is rebound.
+      # `rebind_validator` recurses into that ivar (replacing the array, never
+      # mutating the source's own), so nested sub-validators are rebound too --
+      # and so is an `AllValidator` nested inside another (`validates: { all:
+      # { all: ... } }`).
+      #
+      # To be precise about what this buys: graphql-ruby 2.6 only reads the
+      # OUTER validator's `@validated` when interpolating `%{validated}` into
+      # an error message (`Validator.validate!` does it once, over the derived
+      # argument's own validators; `AllValidator#validate` passes its
+      # sub-validators' error strings through with the placeholder still
+      # unfilled). So a stale sub-validator `@validated` does NOT currently
+      # corrupt any error message -- the earlier "known gap" note here (and
+      # PR #46's review) assumed it did. The rebind is about the reference
+      # itself: a dup'd validator that outlives this call must not keep a live
+      # handle back to the source argument.
       def transplant_validators(argument, source)
         return unless source
 
         validators = source.validators
         return if validators.empty?
 
-        rebound = validators.map do |validator|
-          validator.dup.tap { |copy| copy.instance_variable_set(:@validated, argument) }
+        argument.instance_variable_set(
+          :@own_validators, validators.map { |validator| rebind_validator(validator, argument) },
+        )
+      end
+
+      # Dup a validator and rebind its `@validated` to the derived argument
+      # (see `transplant_validators`). For an `AllValidator`, also re-dup and
+      # rebind each nested sub-validator -- a plain `dup` shares the
+      # `@validators` array with the source, so the array is replaced rather
+      # than mutated in place (mutating it would rebind the SOURCE argument's
+      # own sub-validators onto the derived argument).
+      def rebind_validator(validator, argument)
+        copy = validator.dup
+        copy.instance_variable_set(:@validated, argument)
+        if copy.is_a?(GraphQL::Schema::Validator::AllValidator)
+          nested = copy.instance_variable_get(:@validators)
+          copy.instance_variable_set(:@validators, nested.map { |sub| rebind_validator(sub, argument) })
         end
-        argument.instance_variable_set(:@own_validators, rebound)
+        copy
       end
 
       def resolve_type(name, candidate, overrides)
@@ -287,6 +313,7 @@ module GraphQL
         :source_argument,
         :check_deprecated_required!,
         :transplant_validators,
+        :rebind_validator,
         :resolve_type
     end
   end

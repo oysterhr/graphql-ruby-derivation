@@ -271,6 +271,28 @@ RSpec.describe GraphQL::Derivation::ArgumentDerivation do
 
         expect(title.type).not_to be_non_null
       end
+
+      # Finding #1 (Rox's PR #46 review): the "preserves ..." specs under the
+      # InputObject context only covered the InputObject source path. Mutation
+      # sources go through the SAME `InputObjectToArgument` mapper, but nothing
+      # asserted the source option metadata actually carries across for them --
+      # a regression in that shared mapper (e.g. a candidate that stopped
+      # carrying its source argument) would still pass every other Mutation
+      # spec here. A source-declared inline (not the shared `CreateExpenseMutation`
+      # fixture, which carries no option metadata and is asserted on elsewhere)
+      # locks the Mutation path in.
+      it 'preserves the source argument option metadata (prepare:, description:)' do
+        source = Class.new(GraphQL::Schema::Mutation) do
+          graphql_name 'MetadataMutation'
+          argument :category, String, required: false, prepare: :strip, description: 'Expense category'
+          field :success, GraphQL::Types::Boolean, null: false
+        end
+
+        arguments = resolve(source) { |pick| pick.optional(:category) }
+        category = arguments.find { |argument| argument.graphql_name == 'category' }
+
+        expect(category).to have_attributes(prepare: :strip, description: 'Expense category')
+      end
     end
 
     context 'with a Symbol (sibling action) source' do
@@ -341,6 +363,33 @@ RSpec.describe GraphQL::Derivation::ArgumentDerivation do
 
       it 're-lists a list-typed sibling argument after unwrapping its element type' do
         expect(tags.type).to have_attributes(list?: true, unwrap: GraphQL::Types::String)
+      end
+
+      # Finding #1 (Rox's PR #46 review): `SiblingCandidate` now carries the
+      # source `GraphQL::Schema::Argument`, so a sibling argument's option
+      # metadata carries across just like an InputObject source's. Nothing
+      # asserted this, though -- a regression that forgot to pass `argument`
+      # to `SiblingCandidate.new` would slip past every other sibling spec.
+      it 'preserves the sibling argument option metadata (prepare:, description:)' do
+        resolver = Class.new do
+          def resolve_sibling_arguments(_name)
+            [GraphQL::Schema::Argument.new(
+              :category,
+              String,
+              owner: nil,
+              required: false,
+              prepare: :strip,
+              description: 'Expense category',
+            )]
+          end
+        end.new
+
+        arguments = described_class.resolve(
+          :create, ->(pick) { pick.optional(:category) }, context: resolver,
+        )
+        category = arguments.find { |argument| argument.graphql_name == 'category' }
+
+        expect(category).to have_attributes(prepare: :strip, description: 'Expense category')
       end
     end
 

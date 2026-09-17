@@ -50,6 +50,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   other reference to it in code and docs already says "coercion" (`coerce_input`,
   `coerce_request_arguments`). Breaking rename, made in the pre-release window before the gem has
   any external consumers pinning the old name.
+- Follow-up to the "carry source argument option metadata" fix below: added the source-type
+  coverage it was missing and corrected an inaccurate note about `validates: { all: {...} }`.
+  Metadata carry (`prepare:`/`description:`) is now asserted for Mutation and Symbol (sibling)
+  sources too, not just InputObject, so a regression in either candidate path (e.g. a
+  `SiblingCandidate` built without its source argument) is caught rather than passing on the
+  InputObject specs alone. A `validates: { all: {...} }` derivation is now exercised end-to-end
+  through real coercion, confirming the error message reports the derived argument's name. That
+  spec also settles the previously-flagged concern about the `AllValidator`'s nested
+  sub-validators keeping the source's `@validated`: it is harmless, because a sub-validator's
+  `@validated` is never read -- `%{validated}` is filled from the top-level validator (which is
+  rebound), so no recursive rebind is needed. `transplant_validators`' comment, which had
+  described this as an open gap, is corrected accordingly.
 
 ### Fixed
 
